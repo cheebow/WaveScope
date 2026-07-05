@@ -2,7 +2,7 @@
 """WaveScope アイコンの SVG レイヤー生成"""
 import os
 
-OUT = "/Users/cheebow/Dev/WaveScope/Design/AppIcon"
+OUT = os.path.dirname(os.path.abspath(__file__))
 S = 1024
 CY = S / 2
 
