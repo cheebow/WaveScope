@@ -37,6 +37,19 @@ struct TransportBar: View {
 
             Spacer()
 
+            HStack(spacing: 4) {
+                Image(systemName: volumeIcon)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                Slider(value: Binding(
+                    get: { model.player.volume },
+                    set: { model.player.volume = $0 }
+                ), in: 0...1)
+                .frame(width: 80)
+                .controlSize(.small)
+            }
+            .help("音量")
+
             LevelMeterView(levels: model.player.meterLevels)
 
             HStack(spacing: 4) {
@@ -77,5 +90,14 @@ struct TransportBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var volumeIcon: String {
+        switch model.player.volume {
+        case 0: "speaker.slash.fill"
+        case ..<0.34: "speaker.wave.1.fill"
+        case ..<0.67: "speaker.wave.2.fill"
+        default: "speaker.wave.3.fill"
+        }
     }
 }

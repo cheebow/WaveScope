@@ -28,8 +28,23 @@ final class PlayerController {
     private var generation = 0
     private var tapInstalled = false
 
+    /// 再生音量(0.0〜1.0)。起動間で保持する。
+    /// レベルメーターのタップは playerNode 上にあるため、音量を下げてもメーターはファイル本来のレベルを示す。
+    var volume: Float {
+        didSet {
+            playerNode.volume = volume
+            UserDefaults.standard.set(volume, forKey: Self.volumeDefaultsKey)
+        }
+    }
+
+    private static let volumeDefaultsKey = "playerVolume"
+
     init() {
+        // @Observable の init 内代入は didSet を通らないため、playerNode へは明示的に反映する
+        let stored = UserDefaults.standard.object(forKey: Self.volumeDefaultsKey) as? Float
+        volume = min(max(stored ?? 1.0, 0), 1)
         engine.attach(playerNode)
+        playerNode.volume = volume
     }
 
     var totalFrames: AVAudioFramePosition { file?.length ?? 0 }
