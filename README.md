@@ -2,7 +2,7 @@
 
 音声ファイルの波形表示・再生を行う macOS アプリです(編集・保存機能なしのビューア)。
 
-![アプリアイコン](Design/AppIcon/preview.png)
+<img src="Design/AppIcon/preview.png" width="160" alt="アプリアイコン">
 
 ## 対応フォーマット
 
