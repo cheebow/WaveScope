@@ -27,10 +27,19 @@ final class AppModel {
         case failed(String)
     }
 
+    enum BPMState: Equatable {
+        case none
+        case analyzing
+        /// fromMetadata: true = ファイルの BPM タグの値 / false = 音声解析による推定値
+        case detected(bpm: Double, fromMetadata: Bool)
+    }
+
     var loadState: LoadState = .empty
     var fileURL: URL?
     var displayMode: DisplayMode = .mono
     var selection: ClosedRange<AVAudioFramePosition>?
+    var bpmState: BPMState = .none
+    private var bpmTask: Task<Void, Never>?
     let player = PlayerController()
 
     // 表示範囲(ズーム/スクロール)
@@ -177,6 +186,7 @@ final class AppModel {
         // matches() を通過して古い波形を表示してしまうのを防ぐ
         hiResTask?.cancel()
         hiResPeaks = nil
+        bpmTask?.cancel()
         player.unload()
         selection = nil
         loadGeneration += 1
@@ -191,6 +201,8 @@ final class AppModel {
 
         fileURL = url
         loadState = .loading(0)
+        bpmState = .analyzing
+        startBPMAnalysis(url: url, generation: generation)
 
         loadTask = Task { [weak self] in
             guard let self else { return }
@@ -229,6 +241,33 @@ final class AppModel {
                 guard !Task.isCancelled, self.loadGeneration == generation else { return }
                 self.player.unload()
                 self.loadState = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// BPM の取得。メタデータのタグを優先し、無ければ音声解析で推定する。
+    /// ピーク抽出とは独立に走り、失敗しても loadState には影響しない。
+    private func startBPMAnalysis(url: URL, generation: Int) {
+        bpmTask = Task { [weak self] in
+            let tagged = try? await TempoEstimator.metadataBPM(from: url)
+            guard let self, !Task.isCancelled, self.loadGeneration == generation else { return }
+            if let tagged {
+                self.bpmState = .detected(bpm: tagged, fromMetadata: true)
+                return
+            }
+            let detached = Task.detached(priority: .utility) {
+                try TempoEstimator.estimateTempo(from: url)
+            }
+            let estimated = await withTaskCancellationHandler {
+                try? await detached.value
+            } onCancel: {
+                detached.cancel()
+            }
+            guard !Task.isCancelled, self.loadGeneration == generation else { return }
+            if let bpm = estimated ?? nil {
+                self.bpmState = .detected(bpm: bpm, fromMetadata: false)
+            } else {
+                self.bpmState = .none
             }
         }
     }

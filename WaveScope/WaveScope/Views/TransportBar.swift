@@ -35,6 +35,8 @@ struct TransportBar: View {
                     .foregroundStyle(.secondary)
             }
 
+            bpmLabel
+
             Spacer()
 
             HStack(spacing: 4) {
@@ -90,6 +92,34 @@ struct TransportBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var bpmLabel: some View {
+        switch model.bpmState {
+        case .none:
+            EmptyView()
+        case .analyzing:
+            Text("BPM 解析中…")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.tertiary)
+        case .detected(let bpm, let fromMetadata):
+            // 解析による推定は ±1 程度の精度なので整数に丸める(タグの値はそのまま)
+            Text("BPM \(formatBPM(fromMetadata ? bpm : bpm.rounded()))")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .help(fromMetadata
+                      ? "ファイルの BPM タグの値"
+                      : "音声解析による推定値(倍/半分に取り違える場合があります)")
+        }
+    }
+
+    /// 整数はそのまま、非整数は小数1桁で表示する
+    private func formatBPM(_ bpm: Double) -> String {
+        let rounded = (bpm * 10).rounded() / 10
+        return rounded.truncatingRemainder(dividingBy: 1) == 0
+            ? String(Int(rounded))
+            : String(format: "%.1f", rounded)
     }
 
     private var volumeIcon: String {
