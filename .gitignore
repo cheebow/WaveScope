@@ -1,3 +1,12 @@
+# macOS
+.DS_Store
+
+# ローカルビルド出力(xcodebuild -derivedDataPath build)
+build/
+
+# 生成テスト音源(Scripts/make-test-audio.sh で再生成できる)
+TestAudio/
+
 # Xcode
 #
 # gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore

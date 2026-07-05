@@ -1,0 +1,32 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.290,0.565,0.969,1.000",
+      "display-p3:0.043,0.180,0.439,1.000"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "waveform.svg",
+          "name" : "waveform"
+        }
+      ]
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "playhead.svg",
+          "name" : "playhead"
+        }
+      ]
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
