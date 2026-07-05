@@ -8,8 +8,13 @@
 #   - gh CLI でログイン済みであること
 #
 # 使い方(リポジトリルートから):
-#   ./Scripts/release.sh              # ビルド〜公証〜GitHub Release 作成まで
-#   ./Scripts/release.sh --no-release # GitHub Release 作成をスキップ(zip 生成まで)
+#   ./Scripts/release.sh              # ビルド〜公証〜タグ作成〜GitHub Release 作成まで
+#   ./Scripts/release.sh --no-release # タグ作成・GitHub Release をスキップ(zip 生成まで)
+#
+# ブランチ運用: 日常の開発は develop で行い、リリース時に main へマージしてから
+# main 上でこのスクリプトを実行する。タグは main のコミットに付き、そこから
+# GitHub Release が作られる(デフォルトブランチは develop なので、タグを明示的に
+# 作成・push しないと gh release create が develop にタグを打ってしまう)。
 set -euo pipefail
 
 cd "$(dirname "$0")/../WaveScope"
@@ -25,6 +30,25 @@ VERSION=$(xcodebuild -project WaveScope.xcodeproj -scheme "$SCHEME" -showBuildSe
     awk '/MARKETING_VERSION/ { print $3; exit }')
 TAG="v$VERSION"
 ZIP="$OUT/WaveScope-$VERSION.zip"
+
+if [[ "${1:-}" != "--no-release" ]]; then
+    echo "==> リリース前チェック"
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$BRANCH" != "main" ]]; then
+        echo "リリースは main ブランチから行ってください(現在: $BRANCH)。" >&2
+        echo "develop での作業を main にマージしてから再実行してください。" >&2
+        exit 1
+    fi
+    if [[ -n $(git status --porcelain) ]]; then
+        echo "作業ツリーに未コミットの変更があります。コミットしてから再実行してください。" >&2
+        exit 1
+    fi
+    if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null ||
+        git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+        echo "タグ $TAG は既に存在します。MARKETING_VERSION を上げてから再実行してください。" >&2
+        exit 1
+    fi
+fi
 
 echo "==> リリースビルド $TAG"
 rm -rf "$OUT"
@@ -76,9 +100,13 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 echo "    $ZIP"
 
 if [[ "${1:-}" == "--no-release" ]]; then
-    echo "==> --no-release 指定のため GitHub Release はスキップ"
+    echo "==> --no-release 指定のため タグ作成・GitHub Release はスキップ"
     exit 0
 fi
+
+echo "==> タグ $TAG を作成して main と共に push"
+git tag -a "$TAG" -m "$TAG"
+git push origin main "$TAG"
 
 echo "==> GitHub Release $TAG を作成"
 gh release create "$TAG" "$ZIP" --title "$TAG" --generate-notes

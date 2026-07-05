@@ -28,6 +28,13 @@ xcodebuild test ... -only-testing:'WaveScopeTests/AppModelZoomTests/中央アン
 
 テスト音源の生成(リポジトリルートから): `./Scripts/make-test-audio.sh` → `TestAudio/` に各フォーマットを生成。`test.wav` は左440Hz/右880Hz・中央に1秒の無音ギャップ(ステレオ確認・範囲再生の境界確認用ランドマーク)。`--long` で1時間ファイルも生成。afconvert は MP3 をエンコードできないため MP3 フィクスチャは無い。
 
+## ブランチ運用とリリース
+
+- 日常の開発は **develop ブランチ**で行う(GitHub のデフォルトブランチも develop)。main へ直接コミットしない。
+- リリース手順: `git switch main && git merge --ff-only develop` → `./Scripts/release.sh`(リポジトリルートから実行)。
+- `release.sh` が MARKETING_VERSION からバージョンを取り、ビルド → Developer ID 署名 → 公証 → **main 上に `vX.Y.Z` タグを作成して push** → GitHub Release 作成(zip 添付)まで行う。main ブランチ・クリーンな作業ツリー・タグ未存在をスクリプトが検証する。
+- バージョンを上げるときは pbxproj の `MARKETING_VERSION`(全 configuration)を更新してから develop にコミットする。
+
 ## プロジェクト構成の重要な制約
 
 - **XcodeGen/Tuist 等のプロジェクト生成ツールは使わない**(ユーザーの明示方針)。プロジェクトは Xcode テンプレート製。
