@@ -53,7 +53,19 @@ xcodebuild -exportArchive \
 
 echo "==> 公証(notarization)"
 ditto -c -k --keepParent "$APP" "$OUT/notarize.zip"
-xcrun notarytool submit "$OUT/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+# notarytool は結果が Invalid でも exit 0 で返ることがあるため、status を明示的に確認する
+SUBMIT_JSON=$(xcrun notarytool submit "$OUT/notarize.zip" \
+    --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)
+echo "$SUBMIT_JSON"
+STATUS=$(plutil -extract status raw -o - - <<< "$SUBMIT_JSON" 2>/dev/null || true)
+if [[ "$STATUS" != "Accepted" ]]; then
+    echo "公証が失敗しました (status: ${STATUS:-不明})。ログ:" >&2
+    SUBMISSION_ID=$(plutil -extract id raw -o - - <<< "$SUBMIT_JSON" 2>/dev/null || true)
+    if [[ -n "$SUBMISSION_ID" ]]; then
+        xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "$NOTARY_PROFILE" >&2
+    fi
+    exit 1
+fi
 xcrun stapler staple "$APP"
 
 echo "==> 検証"

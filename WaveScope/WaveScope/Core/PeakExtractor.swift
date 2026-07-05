@@ -45,7 +45,9 @@ nonisolated enum PeakExtractor {
         while file.framePosition < totalFrames {
             try Task.checkCancellation()
             try file.read(into: buffer)
-            let n = Int(buffer.frameLength)
+            // 圧縮フォーマットでは file.length より多くデコードされ得るため、
+            // binCount の根拠である totalFrames を超えるフレームは捨てる(超えると境界外書き込みになる)
+            let n = min(Int(buffer.frameLength), Int(totalFrames - frameIndex))
             guard n > 0, let data = buffer.floatChannelData else { break }
 
             for ch in 0..<channelCount {

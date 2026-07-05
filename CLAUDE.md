@@ -33,7 +33,7 @@ xcodebuild test ... -only-testing:'WaveScopeTests/AppModelZoomTests/中央アン
 - **XcodeGen/Tuist 等のプロジェクト生成ツールは使わない**(ユーザーの明示方針)。プロジェクトは Xcode テンプレート製。
 - ソースは **File System Synchronized Group**(同期フォルダ)なので、`WaveScope/WaveScope/` 以下にファイルを追加/削除するだけでターゲットに反映される。**pbxproj の編集は不要**。
 - ビルド設定で `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`(Xcode 26 テンプレート既定)。**全宣言がデフォルトで MainActor になる**ため、バックグラウンドで動く Core 層の型は明示的に `nonisolated` を付けている。新しい Core 型にも必須。
-- `Info.plist`(`WaveScope/Info.plist`)は `CFBundleDocumentTypes`(「このアプリで開く」対応)だけを持ち、`GENERATE_INFOPLIST_FILE = YES` と併用で自動生成分とマージされる。
+- `Info.plist`(`WaveScope/Info.plist`)は `CFBundleDocumentTypes`(「このアプリで開く」対応)と `LSApplicationCategoryType` だけを持ち、`GENERATE_INFOPLIST_FILE = YES` と併用で自動生成分とマージされる。
 - テスト用に `WaveformView.rulerInterval` / `rulerLabel` は internal にしてある。
 
 ## アプリアイコン

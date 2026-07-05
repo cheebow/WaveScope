@@ -8,6 +8,8 @@ struct WaveformView: View {
 
     @State private var hoverPoint: CGPoint?
 
+    private static let rulerHeight: CGFloat = 18
+
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
@@ -16,7 +18,8 @@ struct WaveformView: View {
                 waveformArea(width: width)
             }
             .overlay(alignment: .topTrailing) {
-                cursorReadout(width: width, height: geo.size.height)
+                // hoverPoint はルーラーを除いた波形領域の座標なので、高さもルーラー分を引いて渡す
+                cursorReadout(width: width, height: geo.size.height - Self.rulerHeight)
             }
             .clipped()
             .onChange(of: width, initial: true) { _, newWidth in model.viewWidth = newWidth }
@@ -51,7 +54,7 @@ struct WaveformView: View {
                         model.selectionDragEnded()
                     },
                     onScroll: { dx in
-                        model.scroll(byPixels: dx)
+                        model.scroll(byPixels: dx, width: width)
                     },
                     onZoom: { factor, anchorX in
                         model.zoom(by: factor, anchorFraction: min(max(anchorX / width, 0), 1))
@@ -116,7 +119,7 @@ struct WaveformView: View {
             }
             context.stroke(majors, with: .color(Color(nsColor: .secondaryLabelColor)), lineWidth: 1)
         }
-        .frame(height: 18)
+        .frame(height: Self.rulerHeight)
     }
 
     private nonisolated static let rulerIntervals: [Double] = [

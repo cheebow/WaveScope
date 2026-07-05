@@ -44,6 +44,8 @@ final class AppModel {
     private var hiResTask: Task<Void, Never>?
 
     private var loadTask: Task<Void, Never>?
+    /// open() ごとに増える世代。キャンセルを観測する前に発行済みの古いコールバックを弾く
+    private var loadGeneration = 0
     private var securityScopedURL: URL?
     private var hasSecurityScope = false
 
@@ -86,9 +88,10 @@ final class AppModel {
         visibleRangeChanged()
     }
 
-    func scroll(byPixels dx: CGFloat) {
-        guard loadedPeaks != nil, viewWidth > 0, isZoomed else { return }
-        let framesPerPixel = Double(visibleLength) / Double(viewWidth)
+    /// width は呼び出し側の実際の描画幅(キャッシュの viewWidth はリサイズ中に古くなり得る)
+    func scroll(byPixels dx: CGFloat, width: CGFloat) {
+        guard loadedPeaks != nil, width > 0, isZoomed else { return }
+        let framesPerPixel = Double(visibleLength) / Double(width)
         visibleStart -= AVAudioFramePosition(Double(dx) * framesPerPixel)
         clampVisible()
         visibleRangeChanged()
@@ -170,8 +173,14 @@ final class AppModel {
 
     func open(url: URL) {
         loadTask?.cancel()
+        // 前のファイルの高解像度抽出が遅れて完了し、フレーム数が同じ新ファイルの
+        // matches() を通過して古い波形を表示してしまうのを防ぐ
+        hiResTask?.cancel()
+        hiResPeaks = nil
         player.unload()
         selection = nil
+        loadGeneration += 1
+        let generation = loadGeneration
 
         // 前のファイルのセキュリティスコープを解放し、新しいファイルのスコープを保持する
         if hasSecurityScope {
@@ -186,10 +195,14 @@ final class AppModel {
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
+                // 再生はピーク抽出と独立なので、スキャン完了を待たずに再生可能にする
+                try self.player.load(url: url)
                 let detached = Task.detached(priority: .userInitiated) {
                     try PeakExtractor.extractPeaks(from: url) { p in
                         Task { @MainActor in
-                            guard case .loading = self.loadState else { return }
+                            // 世代チェック: キャンセル済みの前ロードから遅れて届いた進捗を捨てる
+                            guard self.loadGeneration == generation,
+                                  case .loading = self.loadState else { return }
                             self.loadState = .loading(p)
                         }
                     }
@@ -199,8 +212,7 @@ final class AppModel {
                 } onCancel: {
                     detached.cancel()
                 }
-                guard !Task.isCancelled else { return }
-                try self.player.load(url: url)
+                guard !Task.isCancelled, self.loadGeneration == generation else { return }
                 if peaks.channelCount < 2 {
                     self.displayMode = .mono
                 }
@@ -208,10 +220,14 @@ final class AppModel {
                 self.hiResPeaks = nil
                 self.visibleStart = 0
                 self.visibleLength = peaks.frameCount
+                // 初期表示が高解像度対象のズーム率でも発火するように明示的に通知する
+                // (viewWidth の didSet は同値の再代入では発火しない)
+                self.visibleRangeChanged()
             } catch is CancellationError {
                 // 別ファイルを開いた等。何もしない
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, self.loadGeneration == generation else { return }
+                self.player.unload()
                 self.loadState = .failed(error.localizedDescription)
             }
         }

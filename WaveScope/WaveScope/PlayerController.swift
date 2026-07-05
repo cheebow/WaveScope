@@ -172,7 +172,10 @@ final class PlayerController {
             state = .paused
             meterLevels = []
         case .paused:
-            if !engine.isRunning { try? engine.start() }
+            if !engine.isRunning {
+                // 再開できない(出力デバイス喪失等)場合は一時停止のまま維持する
+                do { try engine.start() } catch { return }
+            }
             playerNode.play()
             state = .playing
         case .stopped:

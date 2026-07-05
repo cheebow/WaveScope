@@ -55,22 +55,22 @@ struct AppModelZoomTests {
     @Test func スクロールは端でクランプされる() {
         let model = makeModel()
         model.zoom(by: 0.5)   // 110250..330750
-        model.scroll(byPixels: 100000)    // 左方向へ大きく
+        model.scroll(byPixels: 100000, width: 100)    // 左方向へ大きく
         #expect(model.visibleStart == 0)
-        model.scroll(byPixels: -100000)   // 右方向へ大きく
+        model.scroll(byPixels: -100000, width: 100)   // 右方向へ大きく
         #expect(model.visibleStart == 441000 - model.visibleLength)
     }
 
     @Test func 全体表示ではスクロールしない() {
         let model = makeModel()
-        model.scroll(byPixels: -50)
+        model.scroll(byPixels: -50, width: 100)
         #expect(model.visibleStart == 0)
     }
 
     @Test func zoomToFitで全体に戻る() {
         let model = makeModel()
         model.zoom(by: 0.25)
-        model.scroll(byPixels: -50)
+        model.scroll(byPixels: -50, width: 100)
         model.zoomToFit()
         #expect(model.visibleStart == 0)
         #expect(model.visibleLength == 441000)
