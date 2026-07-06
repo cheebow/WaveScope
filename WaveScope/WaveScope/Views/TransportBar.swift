@@ -34,6 +34,10 @@ struct TransportBar: View {
                     .font(.body.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+            // 幅が足りないときは BPM ラベル側を先に詰めて、時刻表示を守る
+            .layoutPriority(1)
+
+            bpmLabel
 
             Spacer()
 
@@ -90,6 +94,26 @@ struct TransportBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var bpmLabel: some View {
+        switch model.bpmState {
+        case .none:
+            EmptyView()
+        case .analyzing:
+            Text("BPM 解析中…")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.tertiary)
+        case .detected(let bpm, let fromMetadata):
+            // 解析による推定は ±1 程度の精度なので整数に丸める(タグの値はそのまま)
+            Text("BPM \((fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1))))")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .help(fromMetadata
+                      ? "ファイルの BPM タグの値"
+                      : "音声解析による推定値(倍/半分に取り違える場合があります)")
+        }
     }
 
     private var volumeIcon: String {
