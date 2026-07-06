@@ -14,7 +14,7 @@ struct TransportBar: View {
             }
             .keyboardShortcut(.space, modifiers: [])
             .disabled(!model.player.isLoaded)
-            .help(model.player.state == .playing ? "一時停止" : "再生")
+            .help(model.player.state == .playing ? "Pause" : "Play")
 
             Button {
                 model.player.stop()
@@ -22,15 +22,15 @@ struct TransportBar: View {
                 Image(systemName: "stop.fill")
             }
             .disabled(!model.player.isLoaded)
-            .help("停止")
+            .help("Stop")
 
-            Button("選択範囲を再生") {
+            Button("Play Selection") {
                 model.playSelection()
             }
             .disabled(model.selection == nil)
 
             TimelineView(.animation(minimumInterval: 0.05, paused: model.player.state != .playing)) { _ in
-                Text("\(formatTime(model.player.currentTime)) / \(formatTime(model.player.duration))")
+                Text(verbatim: "\(formatTime(model.player.currentTime)) / \(formatTime(model.player.duration))")
                     .font(.body.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -52,7 +52,7 @@ struct TransportBar: View {
                 .frame(width: 80)
                 .controlSize(.small)
             }
-            .help("音量")
+            .help("Volume")
 
             LevelMeterView(levels: model.player.meterLevels)
 
@@ -63,7 +63,7 @@ struct TransportBar: View {
                     Image(systemName: "minus.magnifyingglass")
                 }
                 .disabled(!model.isZoomed)
-                .help("ズームアウト (⌘−)")
+                .help("Zoom Out (⌘−)")
 
                 Button {
                     model.zoom(by: 0.5)
@@ -71,7 +71,7 @@ struct TransportBar: View {
                     Image(systemName: "plus.magnifyingglass")
                 }
                 .disabled(!model.canZoomIn)
-                .help("ズームイン (⌘+)")
+                .help("Zoom In (⌘+)")
 
                 Button {
                     model.zoomToFit()
@@ -79,10 +79,10 @@ struct TransportBar: View {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                 }
                 .disabled(!model.isZoomed)
-                .help("全体を表示 (⌘0)")
+                .help("Zoom to Fit (⌘0)")
             }
 
-            Picker("表示", selection: $model.displayMode) {
+            Picker("Display", selection: $model.displayMode) {
                 ForEach(DisplayMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
@@ -102,17 +102,17 @@ struct TransportBar: View {
         case .none:
             EmptyView()
         case .analyzing:
-            Text("BPM 解析中…")
+            Text("Analyzing BPM…")
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.tertiary)
         case .detected(let bpm, let fromMetadata):
             // 解析による推定は ±1 程度の精度なので整数に丸める(タグの値はそのまま)
-            Text("BPM \((fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1))))")
+            Text(verbatim: "BPM \((fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1))))")
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .help(fromMetadata
-                      ? "ファイルの BPM タグの値"
-                      : "音声解析による推定値(倍/半分に取り違える場合があります)")
+                      ? "Value from the file's BPM tag"
+                      : "Estimated by audio analysis (may be double or half the actual tempo)")
         }
     }
 

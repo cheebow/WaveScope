@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-WaveScope — 音声ファイル(WAV/MP3/AIFF/M4A/CAF/FLAC)の波形表示・再生を行う macOS アプリ(SwiftUI、macOS 14+、編集・保存機能なしのビューア)。UI は日本語。
+WaveScope — 音声ファイル(WAV/MP3/AIFF/M4A/CAF/FLAC)の波形表示・再生を行う macOS アプリ(SwiftUI、macOS 14+、編集・保存機能なしのビューア)。UI は日英ローカライズ済み: **コード内の文字列は英語キー**で書き、`Localizable.xcstrings` に日本語訳を追加する(開発言語 en、日英以外は英語にフォールバック)。時刻・dB などのデータ表示は `Text(verbatim:)` でカタログに載せない。動作確認で言語を切り替えるには `open <app> --args -AppleLanguages '(en)'`。
 
 ## コマンド
 

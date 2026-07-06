@@ -10,8 +10,8 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .mono: "モノラル"
-        case .stereo: "ステレオ"
+        case .mono: String(localized: "Mono")
+        case .stereo: String(localized: "Stereo")
         }
     }
 }

@@ -18,23 +18,23 @@ struct WaveScopeApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("開く…") {
+                Button("Open…") {
                     AppModel.shared.openPanel()
                 }
                 .keyboardShortcut("o")
             }
             CommandGroup(after: .sidebar) {
-                Button("ズームイン") {
+                Button("Zoom In") {
                     AppModel.shared.zoom(by: 0.5)
                 }
                 .keyboardShortcut("+")
 
-                Button("ズームアウト") {
+                Button("Zoom Out") {
                     AppModel.shared.zoom(by: 2)
                 }
                 .keyboardShortcut("-")
 
-                Button("全体を表示") {
+                Button("Zoom to Fit") {
                     AppModel.shared.zoomToFit()
                 }
                 .keyboardShortcut("0")

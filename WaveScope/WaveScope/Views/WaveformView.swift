@@ -303,7 +303,7 @@ struct WaveformView: View {
             let channelName = isStereo ? (channel == 0 ? "L " : "R ") : ""
             let dB = model.peakDB(atColumn: Int(point.x), channel: channel, width: Int(width))
             let dBText = dB.map { String(format: "%.1f dB", $0) } ?? "-∞ dB"
-            Text("\(formatTime(time))　\(channelName)\(dBText)")
+            Text(verbatim: "\(formatTime(time))　\(channelName)\(dBText)")
                 .font(.caption.monospacedDigit())
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

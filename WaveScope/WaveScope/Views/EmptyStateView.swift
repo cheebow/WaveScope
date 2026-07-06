@@ -8,9 +8,9 @@ struct EmptyStateView: View {
             Image(systemName: "waveform")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("音声ファイルをドロップするか、開いてください")
+            Text("Drop an audio file here, or open one")
                 .foregroundStyle(.secondary)
-            Button("開く…") {
+            Button("Open…") {
                 model.openPanel()
             }
         }
