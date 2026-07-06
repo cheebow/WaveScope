@@ -71,7 +71,7 @@ struct LevelMeterView: View {
         .onChange(of: levels) { _, newLevels in
             applyNewLevels(newLevels)
         }
-        .help("再生レベル(ピーク)")
+        .help("Playback level (peak)")
     }
 
     private func normalized(_ dB: Float) -> Float {

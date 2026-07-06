@@ -27,7 +27,7 @@ struct ContentView: View {
             VStack(spacing: 12) {
                 ProgressView(value: progress)
                     .frame(maxWidth: 280)
-                Text("読み込み中… \(Int(progress * 100))%")
+                Text("Loading… \(Int(progress * 100))%")
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -38,11 +38,11 @@ struct ContentView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
-                Text("読み込めませんでした")
+                Text("Couldn't load the file")
                 Text(message)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("別のファイルを開く…") {
+                Button("Open Another File…") {
                     model.openPanel()
                 }
             }

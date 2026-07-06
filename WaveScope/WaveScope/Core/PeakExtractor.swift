@@ -7,8 +7,8 @@ nonisolated enum AudioReadError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .emptyFile: "音声データが空です"
-        case .bufferAllocationFailed: "バッファの確保に失敗しました"
+        case .emptyFile: String(localized: "The audio data is empty.")
+        case .bufferAllocationFailed: String(localized: "Failed to allocate the audio buffer.")
         }
     }
 }
