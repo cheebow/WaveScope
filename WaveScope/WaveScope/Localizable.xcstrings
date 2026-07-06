@@ -181,6 +181,16 @@
         }
       }
     },
+    "Volume" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音量"
+          }
+        }
+      }
+    },
     "Zoom In" : {
       "localizations" : {
         "ja" : {
