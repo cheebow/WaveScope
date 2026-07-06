@@ -8,31 +8,12 @@ struct PeakExtractorTests {
     ///   L: 先頭512フレームが +0.5、残りは 0
     ///   R: 全フレーム -0.25
     private func makeTestWAV() throws -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("wavescope-test-\(UUID().uuidString).wav")
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 44100.0,
-            AVNumberOfChannelsKey: 2,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false,
-        ]
-        // AVAudioFile はスコープを抜けるときにヘッダを確定する
-        func write() throws {
-            let file = try AVAudioFile(forWriting: url, settings: settings)
-            let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44100,
-                                       channels: 2, interleaved: false)!
-            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1000)!
+        try writeTestWAV(channels: 2, frameCount: 1000) { data in
             for i in 0..<1000 {
-                buffer.floatChannelData![0][i] = i < 512 ? 0.5 : 0
-                buffer.floatChannelData![1][i] = -0.25
+                data[0][i] = i < 512 ? 0.5 : 0
+                data[1][i] = -0.25
             }
-            buffer.frameLength = 1000
-            try file.write(from: buffer)
         }
-        try write()
-        return url
     }
 
     @Test func extractPeaksがbin単位のminmaxを正しく計算する() throws {

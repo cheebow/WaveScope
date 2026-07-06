@@ -53,33 +53,21 @@ nonisolated enum TempoEstimator {
         let format = file.processingFormat
         let channelCount = Int(format.channelCount)
         let totalFrames = file.length
-        guard channelCount > 0, totalFrames > 0 else { throw PeakExtractorError.emptyFile }
+        guard channelCount > 0, totalFrames > 0 else { throw AudioReadError.emptyFile }
 
         let analysisFrames = min(totalFrames, AVAudioFramePosition(maxAnalysisSeconds * format.sampleRate))
-        file.framePosition = (totalFrames - analysisFrames) / 2
-
-        let chunkFrames: AVAudioFrameCount = 65536
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
-            throw PeakExtractorError.bufferAllocationFailed
-        }
-
         var mono = [Float](repeating: 0, count: Int(analysisFrames))
-        var frameIndex = 0
-        while frameIndex < Int(analysisFrames) {
-            try Task.checkCancellation()
-            try file.read(into: buffer)
-            let n = min(Int(buffer.frameLength), Int(analysisFrames) - frameIndex)
-            guard n > 0, let data = buffer.floatChannelData else { break }
-            let scale = 1.0 / Float(channelCount)
+        let scale = 1.0 / Float(channelCount)
+        try PeakExtractor.readChunks(of: file, from: (totalFrames - analysisFrames) / 2,
+                                     frames: analysisFrames) { data, n, offset in
             mono.withUnsafeMutableBufferPointer { out in
                 for ch in 0..<channelCount {
                     let samples = data[ch]
                     for i in 0..<n {
-                        out[frameIndex + i] += samples[i] * scale
+                        out[offset + i] += samples[i] * scale
                     }
                 }
             }
-            frameIndex += n
         }
 
         return estimateTempo(monoSamples: mono, sampleRate: format.sampleRate)
@@ -92,9 +80,9 @@ nonisolated enum TempoEstimator {
         guard var envelope = onsetEnvelope(of: monoSamples) else { return nil }
         let envelopeRate = sampleRate / Double(hopSize)
 
-        // 移動平均窓は推定範囲(minBPM = 40 → 1.5秒周期)の外に置く。
+        // 移動平均窓は推定範囲の外(minBPM の周期 60/minBPM 秒の 5/3 倍)に置く。
         // 窓幅と同じ周期の人工的な相関が整流で生まれるため、範囲内だと誤検出になる
-        detrend(&envelope, windowLength: Int(envelopeRate * 2.5))
+        detrend(&envelope, windowLength: Int(envelopeRate * 60 / minBPM * 5 / 3))
 
         // 平均を引いてから自己相関(オンセット列は非負なのでベースラインを除く)
         let mean = vDSP.mean(envelope)
@@ -104,8 +92,8 @@ nonisolated enum TempoEstimator {
 
         let minLag = max(2, Int(envelopeRate * 60 / maxBPM))
         let maxLag = Int(envelopeRate * 60 / minBPM)
-        // 倍周期の支持を見るため 2*maxLag まで計算する(データ長の半分を上限に)
-        let maxCorrLag = min(2 * maxLag, envelope.count / 2)
+        // 倍周期の支持を見るため 2*maxLag+2 まで計算する(重なりが最低約1秒残る範囲まで)
+        let maxCorrLag = min(2 * maxLag + 2, envelope.count - Int(envelopeRate))
         guard maxLag < maxCorrLag, minLag < maxLag else { return nil }
 
         var correlation = [Float](repeating: 0, count: maxCorrLag + 1)
@@ -134,21 +122,20 @@ nonisolated enum TempoEstimator {
         }
         guard bestLag > 0, correlation[bestLag] >= confidenceThreshold else { return nil }
 
-        var refinedLag = interpolatePeak(correlation, at: bestLag, min: minLag, max: maxCorrLag)
-
+        // 本物のビート列なら周期の倍数すべてに自己相関ピークが立つ。倍周期に支持が
+        // 無いのは孤立イベントの偶然の一致(無音ギャップの両端など)なので棄却する。
+        // 倍周期を検証できないほど入力が短い場合も、検証なしで値を返さず棄却する
         let doubled = 2 * bestLag
-        if doubled + 2 <= maxCorrLag {
-            var peak = doubled
-            for lag in (doubled - 2)...(doubled + 2) where correlation[lag] > correlation[peak] {
-                peak = lag
-            }
-            // 本物のビート列なら周期の倍数すべてに自己相関ピークが立つ。倍周期に支持が
-            // 無いのは孤立イベントの偶然の一致(無音ギャップの両端など)なので棄却する
-            guard correlation[peak] >= max(0.05, 0.25 * correlation[bestLag]) else { return nil }
-            // 倍周期のピークから周期を出すとラグ量子化誤差が半分になる
-            refinedLag = interpolatePeak(correlation, at: peak, min: minLag, max: maxCorrLag) / 2
+        guard doubled + 2 <= maxCorrLag else { return nil }
+        var peak = doubled
+        for lag in (doubled - 2)...(doubled + 2) where correlation[lag] > correlation[peak] {
+            peak = lag
         }
-        return 60 * envelopeRate / refinedLag
+        guard correlation[peak] >= max(0.05, 0.25 * correlation[bestLag]) else { return nil }
+
+        // 倍周期のピークから周期を出すとラグ量子化誤差が半分になる
+        let refinedLag = interpolatePeak(correlation, at: peak, min: minLag, max: maxCorrLag) / 2
+        return min(max(60 * envelopeRate / refinedLag, minBPM), maxBPM)
     }
 
     /// 放物線補間でピーク位置をサブサンプル精度にする
@@ -228,7 +215,9 @@ nonisolated enum TempoEstimator {
         return envelope
     }
 
-    /// 移動平均(約1秒窓)を引いて半波整流し、緩やかな音量変化の影響を除く
+    /// 移動平均を引いて半波整流し、緩やかな音量変化の影響を除く。
+    /// 窓幅と同じ周期に整流由来の人工相関が立つため、呼び出し側は
+    /// windowLength をテンポ推定範囲(minBPM の周期)より十分長く取ること。
     private static func detrend(_ envelope: inout [Float], windowLength: Int) {
         let window = max(3, min(windowLength, envelope.count))
         var prefix = [Double](repeating: 0, count: envelope.count + 1)

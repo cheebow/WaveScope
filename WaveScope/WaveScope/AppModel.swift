@@ -123,6 +123,23 @@ final class AppModel {
         visibleStart = min(max(visibleStart, 0), peaks.frameCount - visibleLength)
     }
 
+    // MARK: - バックグラウンドジョブ共通
+
+    /// ブロッキング処理を Task.detached に載せ、待機側タスクのキャンセルを detached へ転送する。
+    /// 転送を忘れると打ち切ったはずの処理が最後まで走るため、loadTask / hiResTask / bpmTask は
+    /// 必ずこれを使うこと。
+    private func runDetachedCancellable<T: Sendable>(
+        priority: TaskPriority,
+        _ work: @escaping @Sendable () throws -> T
+    ) async -> Result<T, any Error> {
+        let detached = Task.detached(priority: priority) { try work() }
+        return await withTaskCancellationHandler {
+            await detached.result
+        } onCancel: {
+            detached.cancel()
+        }
+    }
+
     // MARK: - 高解像度ピーク(キャッシュ解像度を超えるズーム時)
 
     private func visibleRangeChanged() {
@@ -139,11 +156,11 @@ final class AppModel {
         hiResTask = Task { [weak self] in
             // スクロール/ズーム操作の連打をまとめる
             try? await Task.sleep(for: .milliseconds(60))
-            guard !Task.isCancelled else { return }
-            let result = try? await Task.detached(priority: .userInitiated) {
+            guard let self, !Task.isCancelled else { return }
+            let result = try? await self.runDetachedCancellable(priority: .userInitiated) {
                 try PeakExtractor.extractPixelPeaks(from: url, startFrame: start, endFrame: end, width: width)
-            }.value
-            guard let self, let result, !Task.isCancelled else { return }
+            }.get()
+            guard let result, !Task.isCancelled else { return }
             // 抽出中にさらに動いていたら破棄(matches で描画側も守られるが無駄な更新を避ける)
             guard result.matches(startFrame: self.visibleStart, endFrame: self.visibleEnd, width: Int(self.viewWidth)) else { return }
             self.hiResPeaks = result
@@ -209,7 +226,7 @@ final class AppModel {
             do {
                 // 再生はピーク抽出と独立なので、スキャン完了を待たずに再生可能にする
                 try self.player.load(url: url)
-                let detached = Task.detached(priority: .userInitiated) {
+                let peaks = try await self.runDetachedCancellable(priority: .userInitiated) {
                     try PeakExtractor.extractPeaks(from: url) { p in
                         Task { @MainActor in
                             // 世代チェック: キャンセル済みの前ロードから遅れて届いた進捗を捨てる
@@ -218,12 +235,7 @@ final class AppModel {
                             self.loadState = .loading(p)
                         }
                     }
-                }
-                let peaks = try await withTaskCancellationHandler {
-                    try await detached.value
-                } onCancel: {
-                    detached.cancel()
-                }
+                }.get()
                 guard !Task.isCancelled, self.loadGeneration == generation else { return }
                 if peaks.channelCount < 2 {
                     self.displayMode = .mono
@@ -240,6 +252,9 @@ final class AppModel {
             } catch {
                 guard !Task.isCancelled, self.loadGeneration == generation else { return }
                 self.player.unload()
+                // 読み込めなかったファイルの BPM をエラー表示の横に出さない
+                self.bpmTask?.cancel()
+                self.bpmState = .none
                 self.loadState = .failed(error.localizedDescription)
             }
         }
@@ -255,16 +270,12 @@ final class AppModel {
                 self.bpmState = .detected(bpm: tagged, fromMetadata: true)
                 return
             }
-            let detached = Task.detached(priority: .utility) {
+            let estimated = await self.runDetachedCancellable(priority: .utility) {
                 try TempoEstimator.estimateTempo(from: url)
             }
-            let estimated = await withTaskCancellationHandler {
-                try? await detached.value
-            } onCancel: {
-                detached.cancel()
-            }
             guard !Task.isCancelled, self.loadGeneration == generation else { return }
-            if let bpm = estimated ?? nil {
+            // success(nil) は「解析できたがビートなし」、failure は読み込みエラー。どちらも非表示
+            if case .success(let bpm?) = estimated {
                 self.bpmState = .detected(bpm: bpm, fromMetadata: false)
             } else {
                 self.bpmState = .none

@@ -58,6 +58,20 @@ struct TempoEstimatorTests {
         #expect(TempoEstimator.estimateTempo(monoSamples: samples, sampleRate: sampleRate) == nil)
     }
 
+    /// 短いクリップ×遅いテンポでも倍周期の支持チェックが働くこと
+    /// (過去に4.5秒クリップの孤立ペアで支持チェックがスキップされ約50 BPMと誤検出された回帰)
+    @Test func 短いクリップの孤立した過渡音ペアはnilを返す() {
+        let sampleRate = 44100.0
+        var samples = [Float](repeating: 0, count: Int(sampleRate * 4.5))
+        for start in [Int(sampleRate * 1.0), Int(sampleRate * 2.2)] {
+            for i in 0..<Int(0.02 * sampleRate) {
+                let t = Double(i) / sampleRate
+                samples[start + i] = Float(0.9 * exp(-t * 200) * sin(2 * .pi * 2000 * t))
+            }
+        }
+        #expect(TempoEstimator.estimateTempo(monoSamples: samples, sampleRate: sampleRate) == nil)
+    }
+
     /// test.wav と同じ構成(サイン波+中央に1秒の無音ギャップ)。
     /// ギャップ境界の孤立したオンセットやサイン波の数値ノイズを
     /// ビートと誤検出しないこと(過去に BPM 60 と誤検出した回帰)
@@ -83,34 +97,14 @@ struct TempoEstimatorTests {
     }
 
     @Test func ファイルからステレオをモノラル化して推定できる() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("wavescope-tempo-\(UUID().uuidString).wav")
-        defer { try? FileManager.default.removeItem(at: url) }
-
         let samples = makeClickTrack(bpm: 120, seconds: 20)
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 44100.0,
-            AVNumberOfChannelsKey: 2,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false,
-        ]
-        // AVAudioFile はスコープを抜けるときにヘッダを確定する
-        func write() throws {
-            let file = try AVAudioFile(forWriting: url, settings: settings)
-            let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44100,
-                                       channels: 2, interleaved: false)!
-            let buffer = AVAudioPCMBuffer(pcmFormat: format,
-                                          frameCapacity: AVAudioFrameCount(samples.count))!
+        let url = try writeTestWAV(channels: 2, frameCount: AVAudioFrameCount(samples.count)) { data in
             for i in 0..<samples.count {
-                buffer.floatChannelData![0][i] = samples[i]
-                buffer.floatChannelData![1][i] = samples[i] * 0.5
+                data[0][i] = samples[i]
+                data[1][i] = samples[i] * 0.5
             }
-            buffer.frameLength = AVAudioFrameCount(samples.count)
-            try file.write(from: buffer)
         }
-        try write()
+        defer { try? FileManager.default.removeItem(at: url) }
 
         let bpm = try TempoEstimator.estimateTempo(from: url)
         #expect(bpm != nil)
@@ -120,26 +114,8 @@ struct TempoEstimatorTests {
     }
 
     @Test func BPMタグの無いWAVのmetadataBPMはnilを返す() async throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("wavescope-notag-\(UUID().uuidString).wav")
+        let url = try writeTestWAV(channels: 1, frameCount: 44100)
         defer { try? FileManager.default.removeItem(at: url) }
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 44100.0,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false,
-        ]
-        func write() throws {
-            let file = try AVAudioFile(forWriting: url, settings: settings)
-            let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44100,
-                                       channels: 1, interleaved: false)!
-            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 44100)!
-            buffer.frameLength = 44100
-            try file.write(from: buffer)
-        }
-        try write()
         let bpm = try await TempoEstimator.metadataBPM(from: url)
         #expect(bpm == nil)
     }

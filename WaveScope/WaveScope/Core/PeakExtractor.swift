@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 
-nonisolated enum PeakExtractorError: LocalizedError {
+nonisolated enum AudioReadError: LocalizedError {
     case emptyFile
     case bufferAllocationFailed
 
@@ -16,6 +16,34 @@ nonisolated enum PeakExtractorError: LocalizedError {
 /// AVAudioFile をチャンク読みして固定解像度の min/max ピークを抽出する。
 /// 同期・ブロッキング実装なので、呼び出し側で Task.detached 等に載せること。
 nonisolated enum PeakExtractor {
+    /// [start, start+frames) を 65536 フレームずつ読み、チャンクごとに body を呼ぶ共通ループ。
+    /// body には (チャンネル別サンプル, 有効フレーム数 n, 範囲先頭からのオフセット) が渡る。
+    /// 圧縮フォーマットでは要求より多くデコードされ得るため、範囲を超えるフレームは
+    /// ここで捨てる(呼び出し側の配列サイズの根拠を超えると境界外書き込みになる)。
+    static func readChunks(
+        of file: AVAudioFile,
+        from start: AVAudioFramePosition,
+        frames total: AVAudioFramePosition,
+        _ body: (_ channelData: UnsafePointer<UnsafeMutablePointer<Float>>,
+                 _ frameCount: Int, _ offset: Int) throws -> Void
+    ) throws {
+        let chunkFrames: AVAudioFrameCount = 65536
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                            frameCapacity: chunkFrames) else {
+            throw AudioReadError.bufferAllocationFailed
+        }
+        file.framePosition = start
+        var offset = 0
+        while offset < Int(total) {
+            try Task.checkCancellation()
+            try file.read(into: buffer)
+            let n = min(Int(buffer.frameLength), Int(total) - offset)
+            guard n > 0, let data = buffer.floatChannelData else { break }
+            try body(data, n, offset)
+            offset += n
+        }
+    }
+
     static func extractPeaks(
         from url: URL,
         samplesPerBin: Int = 256,
@@ -25,12 +53,7 @@ nonisolated enum PeakExtractor {
         let format = file.processingFormat
         let channelCount = Int(format.channelCount)
         let totalFrames = file.length
-        guard channelCount > 0, totalFrames > 0 else { throw PeakExtractorError.emptyFile }
-
-        let chunkFrames: AVAudioFrameCount = 65536
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
-            throw PeakExtractorError.bufferAllocationFailed
-        }
+        guard channelCount > 0, totalFrames > 0 else { throw AudioReadError.emptyFile }
 
         let binCount = Int((totalFrames + AVAudioFramePosition(samplesPerBin) - 1)
                            / AVAudioFramePosition(samplesPerBin))
@@ -38,27 +61,18 @@ nonisolated enum PeakExtractor {
                              count: channelCount)
         var maxs = [[Float]](repeating: [Float](repeating: -.greatestFiniteMagnitude, count: binCount),
                              count: channelCount)
-
-        var frameIndex: AVAudioFramePosition = 0
         var lastReported = 0.0
 
-        while file.framePosition < totalFrames {
-            try Task.checkCancellation()
-            try file.read(into: buffer)
-            // 圧縮フォーマットでは file.length より多くデコードされ得るため、
-            // binCount の根拠である totalFrames を超えるフレームは捨てる(超えると境界外書き込みになる)
-            let n = min(Int(buffer.frameLength), Int(totalFrames - frameIndex))
-            guard n > 0, let data = buffer.floatChannelData else { break }
-
+        try readChunks(of: file, from: 0, frames: totalFrames) { data, n, offset in
             for ch in 0..<channelCount {
                 let samples = data[ch]
                 mins[ch].withUnsafeMutableBufferPointer { minBuf in
                     maxs[ch].withUnsafeMutableBufferPointer { maxBuf in
                         var i = 0
                         while i < n {
-                            let globalFrame = frameIndex + AVAudioFramePosition(i)
-                            let binIndex = Int(globalFrame / AVAudioFramePosition(samplesPerBin))
-                            let remainingInBin = samplesPerBin - Int(globalFrame % AVAudioFramePosition(samplesPerBin))
+                            let globalFrame = offset + i
+                            let binIndex = globalFrame / samplesPerBin
+                            let remainingInBin = samplesPerBin - globalFrame % samplesPerBin
                             let end = min(n, i + remainingInBin)
                             var lo = minBuf[binIndex]
                             var hi = maxBuf[binIndex]
@@ -74,10 +88,8 @@ nonisolated enum PeakExtractor {
                     }
                 }
             }
-            frameIndex += AVAudioFramePosition(n)
-
             if let progress {
-                let p = Double(frameIndex) / Double(totalFrames)
+                let p = Double(offset + n) / Double(totalFrames)
                 if p - lastReported >= 0.01 || p >= 1.0 {
                     lastReported = p
                     progress(p)
@@ -111,17 +123,11 @@ nonisolated enum PeakExtractor {
         width: Int
     ) throws -> HighResPixelPeaks {
         let file = try AVAudioFile(forReading: url)
-        let format = file.processingFormat
-        let channelCount = Int(format.channelCount)
+        let channelCount = Int(file.processingFormat.channelCount)
         let start = max(0, min(startFrame, file.length))
         let end = max(start, min(endFrame, file.length))
         let totalFrames = Int(end - start)
-        guard channelCount > 0, totalFrames > 0, width > 0 else { throw PeakExtractorError.emptyFile }
-
-        let chunkFrames: AVAudioFrameCount = 65536
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
-            throw PeakExtractorError.bufferAllocationFailed
-        }
+        guard channelCount > 0, totalFrames > 0, width > 0 else { throw AudioReadError.emptyFile }
 
         var mins = [[Float]](repeating: [Float](repeating: .greatestFiniteMagnitude, count: width),
                              count: channelCount)
@@ -129,20 +135,13 @@ nonisolated enum PeakExtractor {
                              count: channelCount)
         let framesPerPixel = Double(totalFrames) / Double(width)
 
-        file.framePosition = start
-        var frameIndex = 0
-        while frameIndex < totalFrames {
-            try Task.checkCancellation()
-            try file.read(into: buffer)
-            let n = min(Int(buffer.frameLength), totalFrames - frameIndex)
-            guard n > 0, let data = buffer.floatChannelData else { break }
-
+        try readChunks(of: file, from: start, frames: AVAudioFramePosition(totalFrames)) { data, n, offset in
             for ch in 0..<channelCount {
                 let samples = data[ch]
                 mins[ch].withUnsafeMutableBufferPointer { minBuf in
                     maxs[ch].withUnsafeMutableBufferPointer { maxBuf in
                         for i in 0..<n {
-                            let column = min(Int(Double(frameIndex + i) / framesPerPixel), width - 1)
+                            let column = min(Int(Double(offset + i) / framesPerPixel), width - 1)
                             let s = samples[i]
                             if s < minBuf[column] { minBuf[column] = s }
                             if s > maxBuf[column] { maxBuf[column] = s }
@@ -150,7 +149,6 @@ nonisolated enum PeakExtractor {
                     }
                 }
             }
-            frameIndex += n
         }
 
         // サンプルが入らなかった列は近傍と同じ扱いで無音にする

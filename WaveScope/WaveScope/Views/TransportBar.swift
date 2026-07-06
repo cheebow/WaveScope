@@ -34,6 +34,8 @@ struct TransportBar: View {
                     .font(.body.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+            // 幅が足りないときは BPM ラベル側を先に詰めて、時刻表示を守る
+            .layoutPriority(1)
 
             bpmLabel
 
@@ -105,21 +107,13 @@ struct TransportBar: View {
                 .foregroundStyle(.tertiary)
         case .detected(let bpm, let fromMetadata):
             // 解析による推定は ±1 程度の精度なので整数に丸める(タグの値はそのまま)
-            Text("BPM \(formatBPM(fromMetadata ? bpm : bpm.rounded()))")
+            Text("BPM \((fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1))))")
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .help(fromMetadata
                       ? "ファイルの BPM タグの値"
                       : "音声解析による推定値(倍/半分に取り違える場合があります)")
         }
-    }
-
-    /// 整数はそのまま、非整数は小数1桁で表示する
-    private func formatBPM(_ bpm: Double) -> String {
-        let rounded = (bpm * 10).rounded() / 10
-        return rounded.truncatingRemainder(dividingBy: 1) == 0
-            ? String(Int(rounded))
-            : String(format: "%.1f", rounded)
     }
 
     private var volumeIcon: String {
