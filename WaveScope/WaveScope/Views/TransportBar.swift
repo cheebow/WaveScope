@@ -33,6 +33,7 @@ struct TransportBar: View {
                 Text(verbatim: "\(formatTime(model.player.currentTime)) / \(formatTime(model.player.duration))")
                     .font(.body.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)   // 幅不足時に縦折り返しでバーの高さが膨らむのを防ぐ
             }
             // 幅が足りないときは BPM ラベル側を先に詰めて、時刻表示を守る
             .layoutPriority(1)
@@ -105,11 +106,13 @@ struct TransportBar: View {
             Text("Analyzing BPM…")
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.tertiary)
+                .lineLimit(1)
         case .detected(let bpm, let fromMetadata):
             // 解析による推定は ±1 程度の精度なので整数に丸める(タグの値はそのまま)
             Text(verbatim: "BPM \((fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1))))")
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
+                .lineLimit(1)   // 幅不足時に縦折り返しでバーの高さが膨らむのを防ぐ
                 .help(fromMetadata
                       ? "Value from the file's BPM tag"
                       : "Estimated by audio analysis (may be double or half the actual tempo)")
