@@ -161,6 +161,16 @@
         }
       }
     },
+    "The file may be in an unsupported format or corrupted." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "対応していない形式か、ファイルが壊れている可能性があります。"
+          }
+        }
+      }
+    },
     "The audio data is empty." : {
       "localizations" : {
         "ja" : {

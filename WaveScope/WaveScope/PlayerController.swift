@@ -45,6 +45,37 @@ final class PlayerController {
         volume = min(max(stored ?? 1.0, 0), 1)
         engine.attach(playerNode)
         playerNode.volume = volume
+        // 出力デバイスの変更(ヘッドホン抜き差し等)でエンジンが停止したとき、
+        // state が .playing のまま固まらないように監視する
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(engineConfigurationDidChange(_:)),
+            name: .AVAudioEngineConfigurationChange,
+            object: engine
+        )
+    }
+
+    /// AVAudioEngineConfigurationChange はバックグラウンドスレッドから届くため、
+    /// nonisolated で受けて MainActor へ移してから状態を触る
+    @objc nonisolated private func engineConfigurationDidChange(_ notification: Notification) {
+        Task { @MainActor in
+            self.handleEngineConfigurationChange()
+        }
+    }
+
+    /// デバイス変更等でエンジンが停止したら、現在位置を保持して一時停止扱いにする。
+    /// スケジュール済みセグメントは失効しているので、再開は togglePlayPause の
+    /// 再スケジュール経路(engine が止まっている場合)を通る。
+    private func handleEngineConfigurationChange() {
+        // この通知はエンジン起動時などにも発火する。デバイス変更で実際に
+        // エンジンが停止した場合(再生中なのに動いていない)だけ処理する
+        guard state == .playing, !engine.isRunning else { return }
+        let position = currentFrame
+        generation += 1   // playerNode.stop() の完了コールバックが .stopped に遷移させるのを防ぐ
+        playerNode.stop()
+        pausedFrame = position
+        state = .paused
+        meterLevels = []
     }
 
     var totalFrames: AVAudioFramePosition { file?.length ?? 0 }
@@ -172,12 +203,14 @@ final class PlayerController {
             state = .paused
             meterLevels = []
         case .paused:
-            if !engine.isRunning {
-                // 再開できない(出力デバイス喪失等)場合は一時停止のまま維持する
-                do { try engine.start() } catch { return }
+            if engine.isRunning {
+                playerNode.play()
+                state = .playing
+            } else {
+                // エンジンが止まっている(デバイス変更等)場合、スケジュール済み
+                // セグメントは失効しているので、保持した位置から再スケジュールする
+                play(from: pausedFrame, to: segmentEndFrame, asSelection: isSelectionSegment)
             }
-            playerNode.play()
-            state = .playing
         case .stopped:
             play(from: 0, to: totalFrames)
         }

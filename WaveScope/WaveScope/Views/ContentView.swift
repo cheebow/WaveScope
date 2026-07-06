@@ -9,7 +9,9 @@ struct ContentView: View {
             Divider()
             TransportBar()
         }
-        .frame(minWidth: 600, minHeight: 320)
+        // トランスポートバーの固定幅要素(音量・レベルメーター・ズーム・表示切替など)が
+        // 収まる幅を下限にする。これより狭いとテキストが縦折り返しになりバーが崩れる
+        .frame(minWidth: 950, minHeight: 320)
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             model.open(url: url)
@@ -39,9 +41,13 @@ struct ContentView: View {
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
                 Text("Couldn't load the file")
-                Text(message)
+                Text("The file may be in an unsupported format or corrupted.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                // 生のOSエラーは調査の手がかりとして小さく残す
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
                 Button("Open Another File…") {
                     model.openPanel()
                 }
