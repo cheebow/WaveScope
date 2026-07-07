@@ -34,6 +34,13 @@ struct WaveScopeApp: App {
                 }
                 .keyboardShortcut("i")
             }
+            CommandGroup(after: .pasteboard) {
+                Button("Copy BPM") {
+                    // BPM 未検出時は何もしない(コピー対象がない)
+                    AppModel.shared.copyBPM()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+            }
             CommandGroup(after: .sidebar) {
                 Button("Zoom In") {
                     AppModel.shared.zoom(by: 0.5)
