@@ -2,9 +2,8 @@ import Foundation
 import AVFoundation
 import Accelerate
 
-/// 曲のテンポ(BPM)を求める。2経路:
-///   1. metadataBPM: ファイルの BPM タグ(ID3 TBPM / iTunes tempo)を読む
-///   2. estimateTempo: 音声解析(スペクトラルフラックス → 自己相関)で推定する
+/// 曲のテンポ(BPM)を音声解析(スペクトラルフラックス → 自己相関)で推定する。
+/// タグ由来の BPM は AudioMetadata.bpm を先に確認し、無い場合だけこちらを使うこと。
 /// estimateTempo は同期・ブロッキング実装なので、呼び出し側で Task.detached 等に載せること。
 nonisolated enum TempoEstimator {
     /// 推定対象のテンポ範囲
@@ -15,34 +14,6 @@ nonisolated enum TempoEstimator {
     private static let hopSize = 256
     /// 自己相関ピークがこの値(正規化 -1〜1)未満なら「ビートなし」として nil を返す
     private static let confidenceThreshold: Float = 0.1
-
-    // MARK: - メタデータの BPM タグ
-
-    /// BPM タグ(ID3 TBPM / iTunes tempo)があればその値を返す。無ければ nil。
-    static func metadataBPM(from url: URL) async throws -> Double? {
-        let asset = AVURLAsset(url: url)
-        let metadata = try await asset.load(.metadata)
-        let identifiers: [AVMetadataIdentifier] = [
-            .id3MetadataBeatsPerMinute,
-            .iTunesMetadataBeatsPerMin,
-        ]
-        for identifier in identifiers {
-            for item in AVMetadataItem.metadataItems(from: metadata, filteredByIdentifier: identifier) {
-                guard let value = try? await item.load(.value) else { continue }
-                let bpm: Double?
-                if let number = value as? NSNumber {
-                    bpm = number.doubleValue
-                } else if let string = value as? String {
-                    bpm = Double(string.trimmingCharacters(in: .whitespaces))
-                } else {
-                    bpm = nil
-                }
-                // 未設定を 0 で埋めるタグ付けソフトがあるため、妥当な範囲だけ採用する
-                if let bpm, (20...999).contains(bpm) { return bpm }
-            }
-        }
-        return nil
-    }
 
     // MARK: - 音声解析によるテンポ推定
 
