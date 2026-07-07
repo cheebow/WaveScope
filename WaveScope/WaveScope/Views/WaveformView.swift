@@ -169,8 +169,11 @@ struct WaveformView: View {
             guard rect.height > 20 else { return }
             drawDBGridLines(in: &context, rect: rect)
             let (mins, maxs): ([Float], [Float])
-            if let hiRes, hiRes.matches(startFrame: visibleStart, endFrame: visibleEnd, width: width) {
-                (mins, maxs) = hiRes.pixelPeaks(channel: channel)
+            if let rebinned = hiRes?.rebinnedPeaks(startFrame: visibleStart, endFrame: visibleEnd,
+                                                   width: width, channel: channel) {
+                // 手元の高解像度データがカバーしている限りそこから再ビニングして描く。
+                // 完全一致を要求すると操作や再生ページ送りのたびに粗い表示が挟まってチラつく
+                (mins, maxs) = rebinned
             } else {
                 (mins, maxs) = peaks.pixelPeaks(width: width, channel: channel,
                                                 startFrame: visibleStart, endFrame: visibleEnd)

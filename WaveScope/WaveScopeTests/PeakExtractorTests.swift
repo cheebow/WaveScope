@@ -59,7 +59,7 @@ struct PeakExtractorTests {
 
         // 全1000フレームを4列に: 列0,1 = L 0.5 / 列2 = 境界(0.5と0が混在) / 列3 = 0
         let hiRes = try PeakExtractor.extractPixelPeaks(from: url, startFrame: 0, endFrame: 1000, width: 4)
-        #expect(hiRes.matches(startFrame: 0, endFrame: 1000, width: 4))
+        #expect(hiRes.covers(startFrame: 0, endFrame: 1000))
         #expect(hiRes.channelMins.count == 2)
 
         let tolerance: Float = 0.001
