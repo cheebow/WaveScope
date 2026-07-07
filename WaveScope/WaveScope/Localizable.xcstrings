@@ -1,22 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Analyzing BPM…" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BPM 解析中…"
-          }
-        }
-      }
-    },
     "Album" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "アルバム"
+          }
+        }
+      }
+    },
+    "Analyzing BPM…" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BPM 解析中…"
           }
         }
       }
@@ -101,6 +101,16 @@
         }
       }
     },
+    "Duration" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "長さ"
+          }
+        }
+      }
+    },
     "Estimated by audio analysis (may be double or half the actual tempo)" : {
       "localizations" : {
         "ja" : {
@@ -117,16 +127,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "バッファの確保に失敗しました"
-          }
-        }
-      }
-    },
-    "Duration" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "長さ"
           }
         }
       }
@@ -191,22 +191,22 @@
         }
       }
     },
-    "Mono" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "モノラル"
-          }
-        }
-      }
-    },
     "Metadata" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "メタデータ"
+          }
+        }
+      }
+    },
+    "Mono" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モノラル"
           }
         }
       }
@@ -321,16 +321,6 @@
         }
       }
     },
-    "The file may be in an unsupported format or corrupted." : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "対応していない形式か、ファイルが壊れている可能性があります。"
-          }
-        }
-      }
-    },
     "The audio data is empty." : {
       "localizations" : {
         "ja" : {
@@ -341,12 +331,12 @@
         }
       }
     },
-    "Value from the file's BPM tag" : {
+    "The file may be in an unsupported format or corrupted." : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ファイルの BPM タグの値"
+            "value" : "対応していない形式か、ファイルが壊れている可能性があります。"
           }
         }
       }
@@ -361,6 +351,16 @@
         }
       }
     },
+    "Value from the file's BPM tag" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルの BPM タグの値"
+          }
+        }
+      }
+    },
     "Volume" : {
       "localizations" : {
         "ja" : {
@@ -370,6 +370,9 @@
           }
         }
       }
+    },
+    "WaveScope" : {
+
     },
     "Year" : {
       "localizations" : {
