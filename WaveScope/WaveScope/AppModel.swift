@@ -153,25 +153,38 @@ final class AppModel {
 
     private func visibleRangeChanged() {
         guard let peaks = loadedPeaks, let url = fileURL, viewWidth > 0 else { return }
-        let width = Int(viewWidth)
         let samplesPerPixel = Double(visibleLength) / Double(viewWidth)
         hiResTask?.cancel()
         if samplesPerPixel >= Double(peaks.samplesPerBin) {
             hiResPeaks = nil
             return
         }
-        let start = visibleStart
-        let end = visibleEnd
+        // 表示範囲より広めに抽出しておく: 後方1画面+前方3画面。
+        // パンや再生のページ送りが手元のデータ内に収まり、粗い表示への
+        // 先祖返り(チラつき)を防ぐ。前方が広いのは再生追従の先読みのため
+        // (ページ送りは追従ポーリング間隔ぶん表示端を追い越すことがある)。
+        let start = max(0, visibleStart - visibleLength)
+        let end = min(peaks.frameCount, visibleEnd + 3 * visibleLength)
+        let columns = Int(Double(end - start) / samplesPerPixel)
+        // 再生中のページ送りは連打操作ではないので即時抽出。
+        // 表示範囲を全くカバーできていないとき(大ジャンプ直後)も
+        // 粗い表示を早く置き換えるため待たない
+        let coversVisible = hiResPeaks?.covers(startFrame: visibleStart, endFrame: visibleEnd) ?? false
+        let debounce = player.state != .playing && coversVisible
+        let generation = loadGeneration
         hiResTask = Task { [weak self] in
-            // スクロール/ズーム操作の連打をまとめる
-            try? await Task.sleep(for: .milliseconds(60))
-            guard let self, !Task.isCancelled else { return }
+            if debounce {
+                // スクロール/ズーム操作の連打をまとめる
+                try? await Task.sleep(for: .milliseconds(60))
+                guard !Task.isCancelled else { return }
+            }
+            guard let self else { return }
             let result = try? await self.runDetachedCancellable(priority: .userInitiated) {
-                try PeakExtractor.extractPixelPeaks(from: url, startFrame: start, endFrame: end, width: width)
+                try PeakExtractor.extractPixelPeaks(from: url, startFrame: start, endFrame: end, width: columns)
             }.get()
-            guard let result, !Task.isCancelled else { return }
-            // 抽出中にさらに動いていたら破棄(matches で描画側も守られるが無駄な更新を避ける)
-            guard result.matches(startFrame: self.visibleStart, endFrame: self.visibleEnd, width: Int(self.viewWidth)) else { return }
+            // 世代チェック: 別ファイルを開いた後に届いた抽出結果を捨てる
+            // (フレーム範囲だけでは同じ長さの別ファイルと区別できない)
+            guard let result, !Task.isCancelled, self.loadGeneration == generation else { return }
             self.hiResPeaks = result
         }
     }
@@ -183,10 +196,9 @@ final class AppModel {
     func peakDB(atColumn x: Int, channel: Int?, width: Int) -> Float? {
         guard let peaks = loadedPeaks, width > 0 else { return nil }
         let peak: Float
-        if let hiRes = hiResPeaks, hiRes.matches(startFrame: visibleStart, endFrame: visibleEnd, width: width),
-           (0..<width).contains(x) {
-            let (mins, maxs) = hiRes.pixelPeaks(channel: channel)
-            peak = max(abs(mins[x]), abs(maxs[x]))
+        if let column = hiResPeaks?.columnPeak(x: x, width: width, channel: channel,
+                                               startFrame: visibleStart, endFrame: visibleEnd) {
+            peak = max(abs(column.min), abs(column.max))
         } else if let column = peaks.columnPeak(x: x, width: width, channel: channel,
                                                 startFrame: visibleStart, endFrame: visibleEnd) {
             peak = max(abs(column.min), abs(column.max))

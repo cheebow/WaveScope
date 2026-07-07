@@ -88,18 +88,51 @@ struct HighResPixelPeaksTests {
         )
     }
 
-    @Test func matchesは範囲と幅の完全一致だけを許す() {
+    @Test func coversは範囲内包を判定する() {
         let hiRes = makeHiRes()
-        #expect(hiRes.matches(startFrame: 100, endFrame: 500, width: 2))
-        #expect(!hiRes.matches(startFrame: 100, endFrame: 500, width: 3))
-        #expect(!hiRes.matches(startFrame: 101, endFrame: 500, width: 2))
+        #expect(hiRes.covers(startFrame: 100, endFrame: 500))
+        #expect(hiRes.covers(startFrame: 200, endFrame: 300))
+        #expect(!hiRes.covers(startFrame: 99, endFrame: 500))
+        #expect(!hiRes.covers(startFrame: 100, endFrame: 501))
+        #expect(!hiRes.covers(startFrame: 300, endFrame: 300))
     }
 
-    @Test func チャンネル指定と合成() {
+    @Test func 同一範囲の再ビニングは元の列をそのまま返す() throws {
         let hiRes = makeHiRes()
-        #expect(hiRes.pixelPeaks(channel: 1).mins == [-0.2, -0.9])
-        let merged = hiRes.pixelPeaks(channel: nil)
+        let rebinned = try #require(hiRes.rebinnedPeaks(startFrame: 100, endFrame: 500,
+                                                        width: 2, channel: 1))
+        #expect(rebinned.mins == [-0.2, -0.9])
+        #expect(rebinned.maxs == [0.2, 0.9])
+        let merged = try #require(hiRes.rebinnedPeaks(startFrame: 100, endFrame: 500,
+                                                      width: 2, channel: nil))
         #expect(merged.mins == [-0.5, -0.9])
         #expect(merged.maxs == [0.5, 0.9])
+    }
+
+    @Test func 部分範囲への再ビニングは該当列だけを使う() throws {
+        // 列0 = フレーム100..<300、列1 = 300..<500
+        let hiRes = makeHiRes()
+        let front = try #require(hiRes.rebinnedPeaks(startFrame: 100, endFrame: 300,
+                                                     width: 2, channel: 0))
+        #expect(front.mins == [-0.5, -0.5])   // ズームインでは同じ列が引き伸ばされる
+        let back = try #require(hiRes.rebinnedPeaks(startFrame: 300, endFrame: 500,
+                                                    width: 1, channel: 0))
+        #expect(back.mins == [-0.1])
+        #expect(back.maxs == [0.1])
+    }
+
+    @Test func カバー外の再ビニングはnilを返す() {
+        let hiRes = makeHiRes()
+        #expect(hiRes.rebinnedPeaks(startFrame: 0, endFrame: 500, width: 2, channel: nil) == nil)
+        #expect(hiRes.rebinnedPeaks(startFrame: 400, endFrame: 600, width: 2, channel: nil) == nil)
+    }
+
+    @Test func columnPeakはカバー範囲内の1列を返す() {
+        let hiRes = makeHiRes()
+        // 表示範囲 300..<500(列1相当)を4列で見たときの先頭列
+        let column = hiRes.columnPeak(x: 0, width: 4, channel: 1, startFrame: 300, endFrame: 500)
+        #expect(column?.min == -0.9)
+        #expect(column?.max == 0.9)
+        #expect(hiRes.columnPeak(x: 0, width: 4, channel: 1, startFrame: 0, endFrame: 200) == nil)
     }
 }
