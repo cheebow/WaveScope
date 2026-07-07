@@ -295,6 +295,20 @@ final class AppModel {
         }
     }
 
+    /// 検出済みの BPM を「BPM124」形式(スペースなし)でクリップボードへコピーする。未検出なら何もしない。
+    /// トランスポートバーの右クリックメニューと編集メニューの両方から使う。
+    func copyBPM() {
+        guard case .detected(let bpm, let fromMetadata) = bpmState else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(Self.bpmCopyText(bpm: bpm, fromMetadata: fromMetadata), forType: .string)
+    }
+
+    /// コピー用の BPM 文字列。表示と同じ丸め(推定値は整数、タグ値は小数1桁まで)
+    static func bpmCopyText(bpm: Double, fromMetadata: Bool) -> String {
+        "BPM" + (fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1)))
+    }
+
     func playSelection() {
         guard let selection else { return }
         player.play(from: selection.lowerBound, to: selection.upperBound, asSelection: true)
