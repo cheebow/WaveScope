@@ -22,6 +22,18 @@ struct TimeFormattingTests {
     }
 }
 
+struct BPMCopyTextTests {
+    @Test func 整数はスペースなしのBPM整数形式になる() {
+        #expect(TransportBar.bpmCopyText(bpm: 124.0, fromMetadata: true) == "BPM124")
+        #expect(TransportBar.bpmCopyText(bpm: 124.0, fromMetadata: false) == "BPM124")
+    }
+
+    @Test func 推定値は整数に丸めタグ値は小数を保つ() {
+        #expect(TransportBar.bpmCopyText(bpm: 123.7, fromMetadata: false) == "BPM124")
+        #expect(TransportBar.bpmCopyText(bpm: 128.5, fromMetadata: true) == "BPM128.5")
+    }
+}
+
 struct RulerTests {
     @Test func 目盛り間隔はきりのいい値に切り上げる() {
         #expect(WaveformView.rulerInterval(forDesired: 0.0008) == 0.001)

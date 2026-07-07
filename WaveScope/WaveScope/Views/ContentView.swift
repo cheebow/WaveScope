@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         VStack(spacing: 0) {
             mainArea
             Divider()
@@ -17,7 +18,12 @@ struct ContentView: View {
             model.open(url: url)
             return true
         }
-        .navigationTitle(model.fileURL?.lastPathComponent ?? "WaveScope")
+        // タグにタイトルがあればそれをウィンドウタイトルに、ファイル名はサブタイトルに回す
+        .navigationTitle(model.displayTitle)
+        .navigationSubtitle(model.metadata?.title != nil ? (model.fileURL?.lastPathComponent ?? "") : "")
+        .sheet(isPresented: $model.showInfoSheet) {
+            InfoSheetView()
+        }
     }
 
     @ViewBuilder

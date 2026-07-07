@@ -113,10 +113,12 @@ struct TempoEstimatorTests {
         }
     }
 
-    @Test func BPMタグの無いWAVのmetadataBPMはnilを返す() async throws {
+    @Test func タグの無いWAVのメタデータは空になる() async throws {
         let url = try writeTestWAV(channels: 1, frameCount: 44100)
         defer { try? FileManager.default.removeItem(at: url) }
-        let bpm = try await TempoEstimator.metadataBPM(from: url)
-        #expect(bpm == nil)
+        let metadata = try await AudioMetadata.load(from: url)
+        #expect(metadata.isEmpty)
+        #expect(metadata.bpm == nil)
+        #expect(metadata.title == nil)
     }
 }

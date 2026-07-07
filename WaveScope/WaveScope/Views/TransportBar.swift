@@ -116,7 +116,20 @@ struct TransportBar: View {
                 .help(fromMetadata
                       ? "Value from the file's BPM tag"
                       : "Estimated by audio analysis (may be double or half the actual tempo)")
+                .contextMenu {
+                    Button("Copy BPM") {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(Self.bpmCopyText(bpm: bpm, fromMetadata: fromMetadata),
+                                             forType: .string)
+                    }
+                }
         }
+    }
+
+    /// コピー用の BPM 文字列。表示と同じ丸めで、スペースなしの「BPM124」形式
+    static func bpmCopyText(bpm: Double, fromMetadata: Bool) -> String {
+        "BPM" + (fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1)))
     }
 
     private var volumeIcon: String {

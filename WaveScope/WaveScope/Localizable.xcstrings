@@ -11,6 +11,66 @@
         }
       }
     },
+    "Album" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アルバム"
+          }
+        }
+      }
+    },
+    "Artist" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アーティスト"
+          }
+        }
+      }
+    },
+    "BPM Tag" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BPM タグ"
+          }
+        }
+      }
+    },
+    "Channels" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャンネル数"
+          }
+        }
+      }
+    },
+    "Close" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "閉じる"
+          }
+        }
+      }
+    },
+    "Copy BPM" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BPM をコピー"
+          }
+        }
+      }
+    },
     "Couldn't load the file" : {
       "localizations" : {
         "ja" : {
@@ -61,6 +121,66 @@
         }
       }
     },
+    "Duration" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "長さ"
+          }
+        }
+      }
+    },
+    "File" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイル"
+          }
+        }
+      }
+    },
+    "File Size" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルサイズ"
+          }
+        }
+      }
+    },
+    "Format" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "形式"
+          }
+        }
+      }
+    },
+    "Genre" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ジャンル"
+          }
+        }
+      }
+    },
+    "Get Info" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "情報を見る"
+          }
+        }
+      }
+    },
     "Loading… %lld%%" : {
       "localizations" : {
         "ja" : {
@@ -77,6 +197,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "モノラル"
+          }
+        }
+      }
+    },
+    "Metadata" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メタデータ"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名前"
+          }
+        }
+      }
+    },
+    "No metadata" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メタデータはありません"
           }
         }
       }
@@ -141,6 +291,16 @@
         }
       }
     },
+    "Sample Rate" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サンプルレート"
+          }
+        }
+      }
+    },
     "Stereo" : {
       "localizations" : {
         "ja" : {
@@ -191,12 +351,32 @@
         }
       }
     },
+    "Title" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイトル"
+          }
+        }
+      }
+    },
     "Volume" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "音量"
+          }
+        }
+      }
+    },
+    "Year" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "年"
           }
         }
       }

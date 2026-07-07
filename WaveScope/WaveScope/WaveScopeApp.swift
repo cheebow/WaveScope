@@ -26,6 +26,13 @@ struct WaveScopeApp: App {
                     AppModel.shared.openPanel()
                 }
                 .keyboardShortcut("o")
+
+                Button("Get Info") {
+                    // ファイル未読み込み時は何も出すものがないので開かない
+                    guard AppModel.shared.loadedPeaks != nil else { return }
+                    AppModel.shared.showInfoSheet = true
+                }
+                .keyboardShortcut("i")
             }
             CommandGroup(after: .sidebar) {
                 Button("Zoom In") {

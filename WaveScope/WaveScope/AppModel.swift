@@ -39,8 +39,17 @@ final class AppModel {
     var displayMode: DisplayMode = .mono
     var selection: ClosedRange<AVAudioFramePosition>?
     var bpmState: BPMState = .none
+    /// ファイルのタグ(タイトル・アーティスト等)。読み取り完了までは nil
+    var metadata: AudioMetadata?
+    /// ファイル情報シートの表示フラグ(⌘I / メニューから)
+    var showInfoSheet = false
     private var bpmTask: Task<Void, Never>?
     let player = PlayerController()
+
+    /// ウィンドウタイトル: タグのタイトル > ファイル名 > アプリ名
+    var displayTitle: String {
+        metadata?.title ?? fileURL?.lastPathComponent ?? "WaveScope"
+    }
 
     // 表示範囲(ズーム/スクロール)
     var visibleStart: AVAudioFramePosition = 0
@@ -204,6 +213,7 @@ final class AppModel {
         hiResTask?.cancel()
         hiResPeaks = nil
         bpmTask?.cancel()
+        metadata = nil
         player.unload()
         selection = nil
         loadGeneration += 1
@@ -252,21 +262,23 @@ final class AppModel {
             } catch {
                 guard !Task.isCancelled, self.loadGeneration == generation else { return }
                 self.player.unload()
-                // 読み込めなかったファイルの BPM をエラー表示の横に出さない
+                // 読み込めなかったファイルの BPM やタイトルをエラー表示と併存させない
                 self.bpmTask?.cancel()
                 self.bpmState = .none
+                self.metadata = nil
                 self.loadState = .failed(error.localizedDescription)
             }
         }
     }
 
-    /// BPM の取得。メタデータのタグを優先し、無ければ音声解析で推定する。
+    /// メタデータ(タグ)の読み取りと BPM の取得。BPM はタグを優先し、無ければ音声解析で推定する。
     /// ピーク抽出とは独立に走り、失敗しても loadState には影響しない。
     private func startBPMAnalysis(url: URL, generation: Int) {
         bpmTask = Task { [weak self] in
-            let tagged = try? await TempoEstimator.metadataBPM(from: url)
+            let loaded = try? await AudioMetadata.load(from: url)
             guard let self, !Task.isCancelled, self.loadGeneration == generation else { return }
-            if let tagged {
+            self.metadata = loaded
+            if let tagged = loaded?.bpm {
                 self.bpmState = .detected(bpm: tagged, fromMetadata: true)
                 return
             }
