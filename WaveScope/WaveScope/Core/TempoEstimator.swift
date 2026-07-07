@@ -7,8 +7,8 @@ import Accelerate
 /// estimateTempo は同期・ブロッキング実装なので、呼び出し側で Task.detached 等に載せること。
 nonisolated enum TempoEstimator {
     /// 推定対象のテンポ範囲
-    static let minBPM = 40.0
-    static let maxBPM = 240.0
+    private static let minBPM = 40.0
+    private static let maxBPM = 240.0
 
     private static let frameSize = 1024
     private static let hopSize = 256

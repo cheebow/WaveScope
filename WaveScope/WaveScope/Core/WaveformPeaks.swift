@@ -1,6 +1,28 @@
 import Foundation
 import AVFoundation
 
+/// [channel][index] の min/max 配列から、指定インデックス範囲・チャンネル選択の合成ピークを返す。
+/// channel が nil または範囲外なら全チャンネル合成。値が無ければ nil。
+/// WaveformPeaks(bin単位)と HighResPixelPeaks(列単位)の集約ループを共有する。
+private nonisolated func mergedPeak(mins: [[Float]], maxs: [[Float]],
+                                    indices: Range<Int>, channel: Int?) -> (min: Float, max: Float)? {
+    let channels: Range<Int>
+    if let channel, channel < mins.count {
+        channels = channel ..< channel + 1
+    } else {
+        channels = 0 ..< mins.count
+    }
+    var lo = Float.greatestFiniteMagnitude
+    var hi = -Float.greatestFiniteMagnitude
+    for ch in channels {
+        for i in indices {
+            lo = min(lo, mins[ch][i])
+            hi = max(hi, maxs[ch][i])
+        }
+    }
+    return lo <= hi ? (lo, hi) : nil
+}
+
 /// デコード済み音声のチャンネル別 min/max ピークキャッシュ。
 /// 固定解像度(samplesPerBin)で保持し、表示幅へは pixelPeaks で再ビニングする。
 nonisolated struct WaveformPeaks: Sendable {
@@ -13,11 +35,6 @@ nonisolated struct WaveformPeaks: Sendable {
 
     var channelCount: Int { channelMins.count }
     var duration: TimeInterval { Double(frameCount) / sampleRate }
-
-    /// 全体を表示幅へ再ビニング(後方互換)
-    func pixelPeaks(width: Int, channel: Int?) -> (mins: [Float], maxs: [Float]) {
-        pixelPeaks(width: width, channel: channel, startFrame: 0, endFrame: frameCount)
-    }
 
     /// フレーム範囲 [startFrame, endFrame) を表示幅(ピクセル数)ぶんの min/max に再ビニングする。
     /// channel が nil ならば全チャンネル合成(モノ表示)。
@@ -54,21 +71,7 @@ nonisolated struct WaveformPeaks: Sendable {
     private func binRangePeak(f0: Double, f1: Double, channel: Int?, binCount: Int) -> (Float, Float) {
         let b0 = min(max(Int(f0) / samplesPerBin, 0), binCount - 1)
         let b1 = min(max(Int(f1) / samplesPerBin, b0 + 1), binCount)
-        let channels: Range<Int>
-        if let channel, channel < channelCount {
-            channels = channel ..< channel + 1
-        } else {
-            channels = 0 ..< channelCount
-        }
-        var lo = Float.greatestFiniteMagnitude
-        var hi = -Float.greatestFiniteMagnitude
-        for ch in channels {
-            for b in b0..<b1 {
-                lo = min(lo, channelMins[ch][b])
-                hi = max(hi, channelMaxs[ch][b])
-            }
-        }
-        return lo <= hi ? (lo, hi) : (0, 0)
+        return mergedPeak(mins: channelMins, maxs: channelMaxs, indices: b0..<b1, channel: channel) ?? (0, 0)
     }
 }
 
@@ -121,24 +124,10 @@ nonisolated struct HighResPixelPeaks: Sendable {
     }
 
     /// データ先頭からのフレームオフセット範囲 [f0, f1) に重なる列の min/max
-    private func columnRangePeak(f0: Double, f1: Double, channel: Int?) -> (Float, Float)? {
+    private func columnRangePeak(f0: Double, f1: Double, channel: Int?) -> (min: Float, max: Float)? {
         let framesPerColumn = Double(endFrame - startFrame) / Double(width)
         let c0 = min(max(Int(f0 / framesPerColumn), 0), width - 1)
         let c1 = min(max(Int(ceil(f1 / framesPerColumn)), c0 + 1), width)
-        let channels: Range<Int>
-        if let channel, channel < channelMins.count {
-            channels = channel ..< channel + 1
-        } else {
-            channels = 0 ..< channelMins.count
-        }
-        var lo = Float.greatestFiniteMagnitude
-        var hi = -Float.greatestFiniteMagnitude
-        for ch in channels {
-            for c in c0..<c1 {
-                lo = min(lo, channelMins[ch][c])
-                hi = max(hi, channelMaxs[ch][c])
-            }
-        }
-        return lo <= hi ? (lo, hi) : nil
+        return mergedPeak(mins: channelMins, maxs: channelMaxs, indices: c0..<c1, channel: channel)
     }
 }

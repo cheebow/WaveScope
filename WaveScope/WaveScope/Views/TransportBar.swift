@@ -59,7 +59,7 @@ struct TransportBar: View {
 
             HStack(spacing: 4) {
                 Button {
-                    model.zoom(by: 2)
+                    model.zoomOut()
                 } label: {
                     Image(systemName: "minus.magnifyingglass")
                 }
@@ -67,7 +67,7 @@ struct TransportBar: View {
                 .help("Zoom Out (⌘−)")
 
                 Button {
-                    model.zoom(by: 0.5)
+                    model.zoomIn()
                 } label: {
                     Image(systemName: "plus.magnifyingglass")
                 }
@@ -108,8 +108,7 @@ struct TransportBar: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
         case .detected(let bpm, let fromMetadata):
-            // 解析による推定は ±1 程度の精度なので整数に丸める(タグの値はそのまま)
-            Text(verbatim: "BPM \((fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1))))")
+            Text(verbatim: "BPM \(AppModel.bpmDisplayNumber(bpm: bpm, fromMetadata: fromMetadata))")
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)   // 幅不足時に縦折り返しでバーの高さが膨らむのを防ぐ

@@ -41,7 +41,7 @@ xcodebuild test ... -only-testing:'WaveScopeTests/AppModelZoomTests/中央アン
 - ソースは **File System Synchronized Group**(同期フォルダ)なので、`WaveScope/WaveScope/` 以下にファイルを追加/削除するだけでターゲットに反映される。**pbxproj の編集は不要**。
 - ビルド設定で `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`(Xcode 26 テンプレート既定)。**全宣言がデフォルトで MainActor になる**ため、バックグラウンドで動く Core 層の型は明示的に `nonisolated` を付けている。新しい Core 型にも必須。
 - `Info.plist`(`WaveScope/Info.plist`)は `CFBundleDocumentTypes`(「このアプリで開く」対応)と `LSApplicationCategoryType` だけを持ち、`GENERATE_INFOPLIST_FILE = YES` と併用で自動生成分とマージされる。
-- テスト用に `WaveformView.rulerInterval` / `rulerLabel` は internal にしてある。
+- テスト用に `TimeRulerView.rulerInterval` / `rulerLabel` は internal にしてある。
 
 ## アプリアイコン
 
@@ -61,13 +61,14 @@ open(url) [AppModel]
   → WaveformView の Canvas → WaveformRenderer.draw(CGContext への純描画)
 ```
 
-**二段構えのズーム描画**: 1ピクセルあたりのサンプル数が 256(samplesPerBin)を下回るズームでは、`PeakExtractor.extractPixelPeaks` が可視範囲だけをファイルから再デコードして `HighResPixelPeaks` を作る(60ms デバウンス、AppModel.visibleRangeChanged)。描画側は `matches(startFrame:endFrame:width:)` が**完全一致するときだけ**高解像度を使い、それ以外は粗いキャッシュで即描画→非同期差し替え。
+**二段構えのズーム描画**: 1ピクセルあたりのサンプル数が 256(samplesPerBin)を下回るズームでは、`PeakExtractor.extractPixelPeaks` が**マージン付き範囲(後方1画面+前方3画面)**をファイルから再デコードして `HighResPixelPeaks` を作る(AppModel.visibleRangeChanged。前方が広いのは再生追従の先読みのため)。60ms デバウンスは「非再生中かつ既存データが可視範囲をカバーしている」ときだけ掛かり、再生ページ送りや大ジャンプ直後は即時抽出。描画側は `covers()` が真なら `rebinnedPeaks()` で任意の表示範囲・幅へ再ビニングして使い、カバー外のみ粗いキャッシュで即描画→非同期差し替え(完全一致を要求すると操作・再生のたびに粗い表示が挟まってチラつく)。ファイル切り替え後の古い抽出結果は世代カウンタで破棄する。
 
 ### レイヤー分離
 
-- `Core/`(WaveformPeaks / PeakExtractor / WaveformRenderer)は **SwiftUI 非依存・nonisolated・Sendable**。将来 QuickLook 拡張ターゲット(v1では見送り)とコード共有するための純度を保つこと。
-- `AppModel`(@MainActor @Observable、シングルトン `.shared`)がロード状態・選択範囲・表示範囲(ズーム/スクロール)・高解像度ピークを持つ。AppDelegate と menu commands からも `.shared` 経由で触る。
+- `Core/`(WaveformPeaks / PeakExtractor / WaveformRenderer / TempoEstimator / AudioMetadata)は **SwiftUI 非依存・nonisolated・Sendable**。将来 QuickLook 拡張ターゲット(v1では見送り)とコード共有するための純度を保つこと。
+- `AppModel`(@MainActor @Observable、シングルトン `.shared`)がロード状態・選択範囲・表示範囲(ズーム/スクロール)・高解像度ピーク・BPM 状態(タグ優先→TempoEstimator による推定)・メタデータ(ウィンドウタイトルに使用)を持つ。AppDelegate と menu commands からも `.shared` 経由で触る。
 - `PlayerController` が AVAudioEngine + AVAudioPlayerNode を包む。UI は `TimelineView` で再生位置をポーリングする(@Observable の再生位置プロパティ変更で波形を再描画させないため、波形 Canvas は TimelineView の外)。
+- **ウィンドウ管理**: 単一 `Window` シーン(WindowGroup だと Finder からのオープンごとにウィンドウが増える)。終了は willClose 通知+1.5秒後の残存メインウィンドウ確認で行う(SwiftUI ライフサイクルでは applicationShouldTerminateAfterLastWindowClosed が呼ばれず、ファイルオープン時に SwiftUI がウィンドウを作り直すため即断できない)。
 
 ### 再生(PlayerController)
 
@@ -76,7 +77,8 @@ open(url) [AppModel]
 - ファイルを開くたびに `processingFormat` で mixer へ**再接続**する(サンプルレートが違うと `playerTime.sampleTime` とファイルフレームの対応が崩れる)。
 - 再生位置 = `segmentStartFrame + playerTime(forNodeTime: lastRenderTime).sampleTime`。`lastRenderTime` はエンジン描画前 nil。
 - `asSelection: true` のセグメント再生中に選択をドラッグし直すと、マウスアップ時に `AppModel.selectionDragEnded()` がライブ追従(位置が新範囲内なら継続、範囲外なら新範囲の先頭から)。
-- レベルメーターは playerNode の tap(512サンプル)→ `meterLevels`(dB)。表示側(LevelMeterView)が 60fps で補間(立ち上がり即時・下降 60dB/s)。
+- レベルメーターは playerNode の tap(512サンプル)→ `meterLevels`(dB)。表示側(LevelMeterView)が 60fps で補間(立ち上がり即時・下降 60dB/s)。タップは playerNode 上にあるため、音量を下げてもメーターはファイル本来のレベルを示す。
+- **デバイス変更対応**: `AVAudioEngineConfigurationChange`(バックグラウンドスレッドから届く)でエンジンが停止したら、現在位置を保持して `.paused` にする(この経路でも世代カウンタを進める)。スケジュール済みセグメントは失効しているため、再開は `togglePlayPause` のエンジン停止時再スケジュール経路を通る。
 
 ### 入力処理
 

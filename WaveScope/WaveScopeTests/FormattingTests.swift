@@ -36,25 +36,25 @@ struct BPMCopyTextTests {
 
 struct RulerTests {
     @Test func 目盛り間隔はきりのいい値に切り上げる() {
-        #expect(WaveformView.rulerInterval(forDesired: 0.0008) == 0.001)
-        #expect(WaveformView.rulerInterval(forDesired: 0.008) == 0.01)
-        #expect(WaveformView.rulerInterval(forDesired: 0.9) == 1)
-        #expect(WaveformView.rulerInterval(forDesired: 1.0) == 1)
-        #expect(WaveformView.rulerInterval(forDesired: 47) == 60)
-        #expect(WaveformView.rulerInterval(forDesired: 400) == 600)
-        #expect(WaveformView.rulerInterval(forDesired: 99999) == 3600)
+        #expect(TimeRulerView.rulerInterval(forDesired: 0.0008) == 0.001)
+        #expect(TimeRulerView.rulerInterval(forDesired: 0.008) == 0.01)
+        #expect(TimeRulerView.rulerInterval(forDesired: 0.9) == 1)
+        #expect(TimeRulerView.rulerInterval(forDesired: 1.0) == 1)
+        #expect(TimeRulerView.rulerInterval(forDesired: 47) == 60)
+        #expect(TimeRulerView.rulerInterval(forDesired: 400) == 600)
+        #expect(TimeRulerView.rulerInterval(forDesired: 99999) == 3600)
     }
 
     @Test func 秒単位のラベル() {
-        #expect(WaveformView.rulerLabel(seconds: 0, interval: 1) == "0:00")
-        #expect(WaveformView.rulerLabel(seconds: 7, interval: 1) == "0:07")
-        #expect(WaveformView.rulerLabel(seconds: 65, interval: 5) == "1:05")
-        #expect(WaveformView.rulerLabel(seconds: 600, interval: 60) == "10:00")
+        #expect(TimeRulerView.rulerLabel(seconds: 0, interval: 1) == "0:00")
+        #expect(TimeRulerView.rulerLabel(seconds: 7, interval: 1) == "0:07")
+        #expect(TimeRulerView.rulerLabel(seconds: 65, interval: 5) == "1:05")
+        #expect(TimeRulerView.rulerLabel(seconds: 600, interval: 60) == "10:00")
     }
 
     @Test func 秒未満のラベルは間隔に応じた桁数になる() {
-        #expect(WaveformView.rulerLabel(seconds: 4.97, interval: 0.01) == "0:04.97")
-        #expect(WaveformView.rulerLabel(seconds: 0.5, interval: 0.1) == "0:00.5")
-        #expect(WaveformView.rulerLabel(seconds: 0.123, interval: 0.001) == "0:00.123")
+        #expect(TimeRulerView.rulerLabel(seconds: 4.97, interval: 0.01) == "0:04.97")
+        #expect(TimeRulerView.rulerLabel(seconds: 0.5, interval: 0.1) == "0:00.5")
+        #expect(TimeRulerView.rulerLabel(seconds: 0.123, interval: 0.001) == "0:00.123")
     }
 }
