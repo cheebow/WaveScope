@@ -43,12 +43,12 @@ struct WaveScopeApp: App {
             }
             CommandGroup(after: .sidebar) {
                 Button("Zoom In") {
-                    AppModel.shared.zoom(by: 0.5)
+                    AppModel.shared.zoomIn()
                 }
                 .keyboardShortcut("+")
 
                 Button("Zoom Out") {
-                    AppModel.shared.zoom(by: 2)
+                    AppModel.shared.zoomOut()
                 }
                 .keyboardShortcut("-")
 

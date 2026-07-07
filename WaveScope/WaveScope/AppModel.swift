@@ -43,7 +43,7 @@ final class AppModel {
     var metadata: AudioMetadata?
     /// ファイル情報シートの表示フラグ(⌘I / メニューから)
     var showInfoSheet = false
-    private var bpmTask: Task<Void, Never>?
+    private var metadataTask: Task<Void, Never>?
     let player = PlayerController()
 
     /// ウィンドウタイトル: タグのタイトル > ファイル名 > アプリ名
@@ -64,8 +64,8 @@ final class AppModel {
     private var loadTask: Task<Void, Never>?
     /// open() ごとに増える世代。キャンセルを観測する前に発行済みの古いコールバックを弾く
     private var loadGeneration = 0
+    /// セキュリティスコープを保持している URL(アクセス許可が取れたときだけ入る)
     private var securityScopedURL: URL?
-    private var hasSecurityScope = false
 
     /// これ以上ズームインしない下限(1ピクセルあたりのサンプル数)
     private static let minSamplesPerPixel = 2.0
@@ -85,6 +85,10 @@ final class AppModel {
     }
 
     // MARK: - ズーム/スクロール
+
+    /// メニュー/ツールバー共通の1段階ズーム(倍率をここで一元管理する)
+    func zoomIn() { zoom(by: 0.5) }
+    func zoomOut() { zoom(by: 2) }
 
     func zoomToFit() {
         guard let peaks = loadedPeaks else { return }
@@ -135,7 +139,7 @@ final class AppModel {
     // MARK: - バックグラウンドジョブ共通
 
     /// ブロッキング処理を Task.detached に載せ、待機側タスクのキャンセルを detached へ転送する。
-    /// 転送を忘れると打ち切ったはずの処理が最後まで走るため、loadTask / hiResTask / bpmTask は
+    /// 転送を忘れると打ち切ったはずの処理が最後まで走るため、loadTask / hiResTask / metadataTask は
     /// 必ずこれを使うこと。
     private func runDetachedCancellable<T: Sendable>(
         priority: TaskPriority,
@@ -195,16 +199,12 @@ final class AppModel {
     /// width はビューの実際の描画幅(キャッシュではなく呼び出し側の GeometryReader の値)を渡す。
     func peakDB(atColumn x: Int, channel: Int?, width: Int) -> Float? {
         guard let peaks = loadedPeaks, width > 0 else { return nil }
-        let peak: Float
-        if let column = hiResPeaks?.columnPeak(x: x, width: width, channel: channel,
-                                               startFrame: visibleStart, endFrame: visibleEnd) {
-            peak = max(abs(column.min), abs(column.max))
-        } else if let column = peaks.columnPeak(x: x, width: width, channel: channel,
-                                                startFrame: visibleStart, endFrame: visibleEnd) {
-            peak = max(abs(column.min), abs(column.max))
-        } else {
-            return nil
-        }
+        // 高解像度データがカバーしていればそれを、外れていれば粗いキャッシュを使う
+        guard let column = hiResPeaks?.columnPeak(x: x, width: width, channel: channel,
+                                                  startFrame: visibleStart, endFrame: visibleEnd)
+            ?? peaks.columnPeak(x: x, width: width, channel: channel,
+                                startFrame: visibleStart, endFrame: visibleEnd) else { return nil }
+        let peak = max(abs(column.min), abs(column.max))
         guard peak > 0 else { return nil }
         return 20 * log10(peak)
     }
@@ -220,11 +220,11 @@ final class AppModel {
 
     func open(url: URL) {
         loadTask?.cancel()
-        // 前のファイルの高解像度抽出が遅れて完了し、フレーム数が同じ新ファイルの
-        // matches() を通過して古い波形を表示してしまうのを防ぐ
+        // 前のファイルの高解像度抽出が遅れて完了し、フレーム範囲が重なる新ファイルの
+        // covers() を通過して古い波形を表示してしまうのを防ぐ(世代チェックの保険)
         hiResTask?.cancel()
         hiResPeaks = nil
-        bpmTask?.cancel()
+        metadataTask?.cancel()
         metadata = nil
         player.unload()
         selection = nil
@@ -232,16 +232,13 @@ final class AppModel {
         let generation = loadGeneration
 
         // 前のファイルのセキュリティスコープを解放し、新しいファイルのスコープを保持する
-        if hasSecurityScope {
-            securityScopedURL?.stopAccessingSecurityScopedResource()
-        }
-        hasSecurityScope = url.startAccessingSecurityScopedResource()
-        securityScopedURL = url
+        securityScopedURL?.stopAccessingSecurityScopedResource()
+        securityScopedURL = url.startAccessingSecurityScopedResource() ? url : nil
 
         fileURL = url
         loadState = .loading(0)
         bpmState = .analyzing
-        startBPMAnalysis(url: url, generation: generation)
+        loadMetadataAndBPM(url: url, generation: generation)
 
         loadTask = Task { [weak self] in
             guard let self else { return }
@@ -275,7 +272,7 @@ final class AppModel {
                 guard !Task.isCancelled, self.loadGeneration == generation else { return }
                 self.player.unload()
                 // 読み込めなかったファイルの BPM やタイトルをエラー表示と併存させない
-                self.bpmTask?.cancel()
+                self.metadataTask?.cancel()
                 self.bpmState = .none
                 self.metadata = nil
                 self.loadState = .failed(error.localizedDescription)
@@ -285,8 +282,8 @@ final class AppModel {
 
     /// メタデータ(タグ)の読み取りと BPM の取得。BPM はタグを優先し、無ければ音声解析で推定する。
     /// ピーク抽出とは独立に走り、失敗しても loadState には影響しない。
-    private func startBPMAnalysis(url: URL, generation: Int) {
-        bpmTask = Task { [weak self] in
+    private func loadMetadataAndBPM(url: URL, generation: Int) {
+        metadataTask = Task { [weak self] in
             let loaded = try? await AudioMetadata.load(from: url)
             guard let self, !Task.isCancelled, self.loadGeneration == generation else { return }
             self.metadata = loaded
@@ -316,9 +313,14 @@ final class AppModel {
         pasteboard.setString(Self.bpmCopyText(bpm: bpm, fromMetadata: fromMetadata), forType: .string)
     }
 
-    /// コピー用の BPM 文字列。表示と同じ丸め(推定値は整数、タグ値は小数1桁まで)
+    /// 表示・コピー共通の BPM 数値文字列。推定値は ±1 程度の精度なので整数に丸め、タグ値は小数1桁まで保つ
+    static func bpmDisplayNumber(bpm: Double, fromMetadata: Bool) -> String {
+        (fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1)))
+    }
+
+    /// コピー用の BPM 文字列。スペースなしの「BPM124」形式
     static func bpmCopyText(bpm: Double, fromMetadata: Bool) -> String {
-        "BPM" + (fromMetadata ? bpm : bpm.rounded()).formatted(.number.precision(.fractionLength(0...1)))
+        "BPM" + bpmDisplayNumber(bpm: bpm, fromMetadata: fromMetadata)
     }
 
     func playSelection() {

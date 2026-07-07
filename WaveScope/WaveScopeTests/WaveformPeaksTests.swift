@@ -22,21 +22,21 @@ struct WaveformPeaksTests {
 
     @Test func 全範囲を等幅で再ビニングするとbinがそのまま返る() {
         let peaks = makePeaks()
-        let (mins, maxs) = peaks.pixelPeaks(width: 4, channel: 0)
+        let (mins, maxs) = peaks.pixelPeaks(width: 4, channel: 0, startFrame: 0, endFrame: 1024)
         #expect(mins == [-0.5, -0.1, 0.0, -1.0])
         #expect(maxs == [0.5, 0.1, 0.0, 1.0])
     }
 
     @Test func 幅を半分にすると隣接binが統合される() {
         let peaks = makePeaks()
-        let (mins, maxs) = peaks.pixelPeaks(width: 2, channel: 0)
+        let (mins, maxs) = peaks.pixelPeaks(width: 2, channel: 0, startFrame: 0, endFrame: 1024)
         #expect(mins == [-0.5, -1.0])
         #expect(maxs == [0.5, 1.0])
     }
 
     @Test func channelがnilなら全チャンネル合成になる() {
         let peaks = makePeaks()
-        let (mins, maxs) = peaks.pixelPeaks(width: 4, channel: nil)
+        let (mins, maxs) = peaks.pixelPeaks(width: 4, channel: nil, startFrame: 0, endFrame: 1024)
         #expect(mins == [-0.5, -0.8, 0.0, -1.0])
         #expect(maxs == [0.5, 0.8, 0.0, 1.0])
     }
@@ -50,7 +50,7 @@ struct WaveformPeaksTests {
 
     @Test func binより広い幅では同じbinが繰り返される() {
         let peaks = makePeaks()
-        let (mins, maxs) = peaks.pixelPeaks(width: 8, channel: 0)
+        let (mins, maxs) = peaks.pixelPeaks(width: 8, channel: 0, startFrame: 0, endFrame: 1024)
         #expect(mins.count == 8)
         #expect(mins[0] == -0.5 && mins[1] == -0.5)
         #expect(maxs[6] == 1.0 && maxs[7] == 1.0)
@@ -58,7 +58,7 @@ struct WaveformPeaksTests {
 
     @Test func 不正な引数では空を返す() {
         let peaks = makePeaks()
-        #expect(peaks.pixelPeaks(width: 0, channel: nil).mins.isEmpty)
+        #expect(peaks.pixelPeaks(width: 0, channel: nil, startFrame: 0, endFrame: 1024).mins.isEmpty)
         #expect(peaks.pixelPeaks(width: 4, channel: nil, startFrame: 500, endFrame: 500).mins.isEmpty)
     }
 
@@ -72,7 +72,7 @@ struct WaveformPeaksTests {
 
     @Test func 存在しないチャンネル指定は合成にフォールバックする() {
         let peaks = makePeaks()
-        let (mins, _) = peaks.pixelPeaks(width: 4, channel: 5)
+        let (mins, _) = peaks.pixelPeaks(width: 4, channel: 5, startFrame: 0, endFrame: 1024)
         #expect(mins == [-0.5, -0.8, 0.0, -1.0])
     }
 }

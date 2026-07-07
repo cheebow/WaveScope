@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Accelerate
 import Observation
 
 /// AVAudioEngine + AVAudioPlayerNode による再生制御。
@@ -130,12 +131,7 @@ final class PlayerController {
             guard n > 0, let data = buffer.floatChannelData else { return }
             var levels: [Float] = []
             for ch in 0..<Int(buffer.format.channelCount) {
-                var peak: Float = 0
-                let samples = data[ch]
-                for i in 0..<n {
-                    let v = abs(samples[i])
-                    if v > peak { peak = v }
-                }
+                let peak = vDSP.maximumMagnitude(UnsafeBufferPointer(start: data[ch], count: n))
                 levels.append(20 * log10(max(peak, 1e-5)))
             }
             Task { @MainActor [weak self] in
