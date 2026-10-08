@@ -15,6 +15,12 @@ nonisolated enum TempoEstimator {
     /// 自己相関ピークがこの値(正規化 -1〜1)未満なら「ビートなし」として nil を返す
     private static let confidenceThreshold: Float = 0.1
 
+    /// テンポ事前分布(対数ガウス)の中心と幅(オクターブ)。中心を 120 より低くしてあるのは、
+    /// オンセットが疎な曲(バラード等)が8分音符レベルの倍テンポに化ける誤りの方が、
+    /// 4つ打ちの半テンポ化より起きやすいため。テストのジャンル別パターン群で較正した値
+    private static let priorCenterBPM = 102.0
+    private static let priorSigmaOctaves: Float = 0.7
+
     // MARK: - 音声解析によるテンポ推定
 
     /// ファイル中央の最大 maxAnalysisSeconds 秒をモノラル化して解析する。
@@ -63,8 +69,8 @@ nonisolated enum TempoEstimator {
 
         let minLag = max(2, Int(envelopeRate * 60 / maxBPM))
         let maxLag = Int(envelopeRate * 60 / minBPM)
-        // 倍周期の支持を見るため 2*maxLag+2 まで計算する(重なりが最低約1秒残る範囲まで)
-        let maxCorrLag = min(2 * maxLag + 2, envelope.count - Int(envelopeRate))
+        // 整数倍(2倍・3倍)の支持を見るため 3*maxLag+4 まで計算する(重なりが最低約1秒残る範囲まで)
+        let maxCorrLag = min(3 * maxLag + 4, envelope.count - Int(envelopeRate))
         guard maxLag < maxCorrLag, minLag < maxLag else { return nil }
 
         var correlation = [Float](repeating: 0, count: maxCorrLag + 1)
@@ -77,14 +83,23 @@ nonisolated enum TempoEstimator {
             }
         }
 
-        // スコア = 自己相関 + 倍周期の支持(基本周期を優先)× 120BPM 中心の緩い事前分布
+        // スコア = ハーモニックコム(周期の整数倍の支持を合算。本物のビート周期なら
+        // 2倍・3倍にもピークが立つ。ジッタ・テンポ揺れを許容するため倍数位置は
+        // ±2ラグの局所最大を取る)× 事前分布
         var bestLag = 0
         var bestScore = -Float.greatestFiniteMagnitude
         for lag in minLag...maxLag {
-            let harmonic = 2 * lag <= maxCorrLag ? 0.4 * correlation[2 * lag] : 0
+            var harmonic: Float = 0
+            for (multiple, weight) in [(2, Float(0.6)), (3, Float(0.3))] {
+                let center = multiple * lag
+                guard center + 2 <= maxCorrLag else { break }
+                var peak = correlation[center]
+                for l in (center - 2)...(center + 2) where correlation[l] > peak { peak = correlation[l] }
+                harmonic += weight * peak
+            }
             let bpm = 60 * envelopeRate / Double(lag)
-            let octaves = Float(log2(bpm / 120))
-            let prior = exp(-0.5 * (octaves / 0.9) * (octaves / 0.9))
+            let octaves = Float(log2(bpm / priorCenterBPM))
+            let prior = exp(-0.5 * (octaves / priorSigmaOctaves) * (octaves / priorSigmaOctaves))
             let score = (correlation[lag] + harmonic) * prior
             if score > bestScore {
                 bestScore = score
@@ -172,6 +187,10 @@ nonisolated enum TempoEstimator {
             }
             // 振幅スペクトルに変換し、DC(bin0 の実部にパックされている)は音量ドリフト対策で除外
             vForce.sqrt(magnitude, result: &magnitude)
+            // 対数圧縮: 音量の大きい帯域(キック等)がフラックスを支配するのを防ぎ、
+            // 静かなオンセット(ハイハット・弱いアタックの和音など)にも感度を持たせる
+            vDSP.multiply(100, magnitude, result: &magnitude)
+            vForce.log1p(magnitude, result: &magnitude)
             magnitude[0] = 0
             spectralSum += vDSP.sum(magnitude)
             vDSP.subtract(magnitude, previousMagnitude, result: &difference)
