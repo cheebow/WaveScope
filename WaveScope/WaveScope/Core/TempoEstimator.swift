@@ -15,11 +15,15 @@ nonisolated enum TempoEstimator {
     /// 自己相関ピークがこの値(正規化 -1〜1)未満なら「ビートなし」として nil を返す
     private static let confidenceThreshold: Float = 0.1
 
-    /// テンポ事前分布(対数ガウス)の中心と幅(オクターブ)。中心を 120 より低くしてあるのは、
-    /// オンセットが疎な曲(バラード等)が8分音符レベルの倍テンポに化ける誤りの方が、
-    /// 4つ打ちの半テンポ化より起きやすいため。テストのジャンル別パターン群で較正した値
-    private static let priorCenterBPM = 102.0
-    private static let priorSigmaOctaves: Float = 0.7
+    /// テンポ事前分布(対数ガウス)の中心と幅(オクターブ)。倍/半テンポの取り違えは
+    /// 主に半周期支持(スコア計算参照)で防ぎ、事前分布は残る2倍の曖昧さ
+    /// (8分が均等に刻まれる速い曲の 165 vs 82.5 など)の決定に使う。幅を広く取り、
+    /// 自己相関に差がある場合はデータ側の判断を優先させる。
+    /// テストのジャンル別パターン群で較正した値(全パターンが通る領域の中央)
+    private static let priorCenterBPM = 140.0
+    private static let priorSigmaOctaves: Float = 1.3
+    /// 半周期(拍の2分割=8分音符レベル)の支持の重み
+    private static let halfPeriodWeight: Float = 0.6
 
     // MARK: - 音声解析によるテンポ推定
 
@@ -69,13 +73,15 @@ nonisolated enum TempoEstimator {
 
         let minLag = max(2, Int(envelopeRate * 60 / maxBPM))
         let maxLag = Int(envelopeRate * 60 / minBPM)
-        // 整数倍(2倍・3倍)の支持を見るため 3*maxLag+4 まで計算する(重なりが最低約1秒残る範囲まで)
+        // 整数倍(2倍・3倍)の支持を見るため 3*maxLag+4 まで計算する(重なりが最低約1秒残る範囲まで)。
+        // 下側は半周期の支持を見るため minLag/2 付近から計算する
+        let minCorrLag = max(1, minLag / 2 - 2)
         let maxCorrLag = min(3 * maxLag + 4, envelope.count - Int(envelopeRate))
         guard maxLag < maxCorrLag, minLag < maxLag else { return nil }
 
         var correlation = [Float](repeating: 0, count: maxCorrLag + 1)
         envelope.withUnsafeBufferPointer { env in
-            for lag in minLag...maxCorrLag {
+            for lag in minCorrLag...maxCorrLag {
                 var dot: Float = 0
                 vDSP_dotpr(env.baseAddress!, 1, env.baseAddress! + lag, 1, &dot,
                            vDSP_Length(env.count - lag))
@@ -85,7 +91,13 @@ nonisolated enum TempoEstimator {
 
         // スコア = ハーモニックコム(周期の整数倍の支持を合算。本物のビート周期なら
         // 2倍・3倍にもピークが立つ。ジッタ・テンポ揺れを許容するため倍数位置は
-        // ±2ラグの局所最大を取る)× 事前分布
+        // ±2ラグの局所最大を取る)× 事前分布。
+        // さらに半周期(拍の2分割)の支持を加える: 8分音符が均等に刻まれる曲では8分の
+        // 倍数すべてに同程度のピークが立ち、8分3つ分(付点4分)の周期も整数倍の支持だけでは
+        // 区別できない(165 BPM の曲が 110 になった回帰)。2分割できる周期を優先することで
+        // 3分割の誤りを防ぎ、疎なバラードが8分レベルの倍テンポ(16分の支持が無い)に化けるのも抑える。
+        // 半周期の支持は候補自身の相関で頭打ちにする: 遅い候補の半周期は速い候補の周期そのものなので、
+        // そのままだと速い候補のピークを遅い候補が横取りし、半テンポ化する(176 BPM の曲が 88 になった回帰)
         var bestLag = 0
         var bestScore = -Float.greatestFiniteMagnitude
         for lag in minLag...maxLag {
@@ -97,6 +109,11 @@ nonisolated enum TempoEstimator {
                 for l in (center - 2)...(center + 2) where correlation[l] > peak { peak = correlation[l] }
                 harmonic += weight * peak
             }
+            var half: Float = -1
+            for l in max(minCorrLag, lag / 2 - 1)...((lag + 1) / 2 + 1) where correlation[l] > half {
+                half = correlation[l]
+            }
+            harmonic += halfPeriodWeight * min(half, correlation[lag])
             let bpm = 60 * envelopeRate / Double(lag)
             let octaves = Float(log2(bpm / priorCenterBPM))
             let prior = exp(-0.5 * (octaves / priorSigmaOctaves) * (octaves / priorSigmaOctaves))

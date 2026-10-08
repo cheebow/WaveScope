@@ -124,8 +124,32 @@ struct TempoEstimatorTests {
         #expect(abs(bpm - 104) < 2, "推定: \(bpm)")
     }
 
+    /// 8分ハットが均等に刻まれる速い8ビート。8分の倍数すべてに同程度の自己相関ピークが
+    /// 立つため、8分3つ分(110)や半テンポ(82.5)に化けやすい(半周期支持を入れた理由の回帰)
+    @Test func 速い8ビートが3分割や半テンポにならない() throws {
+        let samples = renderSong(bpm: 165, seconds: 30, hits: [
+            (0, "kick", 0.9), (8, "kick", 0.85), (4, "snare", 0.8), (12, "snare", 0.8),
+            (0, "hat", 0.25), (2, "hat", 0.25), (4, "hat", 0.25), (6, "hat", 0.25),
+            (8, "hat", 0.25), (10, "hat", 0.25), (12, "hat", 0.25), (14, "hat", 0.25),
+        ])
+        let bpm = try #require(TempoEstimator.estimateTempo(monoSamples: samples, sampleRate: 44100))
+        #expect(abs(bpm - 165) < 2, "推定: \(bpm)")
+    }
+
+    /// キック・スネアが主体でハットが控えめな速いロック。拍レベルの相関が最も強いのに、
+    /// 半周期の支持で半テンポ(88)の候補が勝った回帰(支持を候補自身の相関で頭打ちにして解消)
+    @Test func 速いロックが半テンポにならない() throws {
+        let samples = renderSong(bpm: 176, seconds: 30, hits: [
+            (0, "kick", 0.9), (8, "kick", 0.85), (10, "kick", 0.7), (4, "snare", 0.85), (12, "snare", 0.85),
+            (0, "hat", 0.15), (2, "hat", 0.1), (4, "hat", 0.15), (6, "hat", 0.1),
+            (8, "hat", 0.15), (10, "hat", 0.1), (12, "hat", 0.15), (14, "hat", 0.1),
+        ])
+        let bpm = try #require(TempoEstimator.estimateTempo(monoSamples: samples, sampleRate: 44100))
+        #expect(abs(bpm - 176) < 2, "推定: \(bpm)")
+    }
+
     /// ドラムなしのソフトなピアノ+パッド。オンセットが疎な曲は8分音符レベルの
-    /// 倍テンポ(144)に化けやすい(事前分布を 102 BPM 中心に較正した理由の回帰)
+    /// 倍テンポ(144)に化けやすい(16分の支持が無いことを半周期支持で見る回帰)
     @Test func ピアノバラードが倍テンポにならない() throws {
         let samples = renderSong(bpm: 72, seconds: 30, hits: [
             (0, "tone", 0.35), (4, "tone", 0.35), (6, "tone", 0.3), (8, "tone", 0.35),
