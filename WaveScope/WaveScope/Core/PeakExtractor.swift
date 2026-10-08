@@ -16,6 +16,10 @@ nonisolated enum AudioReadError: LocalizedError {
 /// AVAudioFile をチャンク読みして固定解像度の min/max ピークを抽出する。
 /// 同期・ブロッキング実装なので、呼び出し側で Task.detached 等に載せること。
 nonisolated enum PeakExtractor {
+    /// length と実デコード可能フレーム数の差として許容する末尾フレーム数
+    /// (MP3/AAC のプライミング+パディングは数パケット分 = 数千フレーム)
+    private static let trailingPaddingTolerance: AVAudioFramePosition = 8192
+
     /// [start, start+frames) を 65536 フレームずつ読み、チャンクごとに body を呼ぶ共通ループ。
     /// body には (チャンネル別サンプル, 有効フレーム数 n, 範囲先頭からのオフセット) が渡る。
     /// 圧縮フォーマットでは要求より多くデコードされ得るため、範囲を超えるフレームは
@@ -36,7 +40,15 @@ nonisolated enum PeakExtractor {
         var offset = 0
         while offset < Int(total) {
             try Task.checkCancellation()
-            try file.read(into: buffer)
+            do {
+                try file.read(into: buffer)
+            } catch where file.length - file.framePosition <= trailingPaddingTolerance {
+                // 圧縮フォーマット(MP3 等)では length がエンコーダのプライミング/パディングを
+                // 含み、実際にデコードできるフレーム数より数千フレーム長いことがある。
+                // その末尾を読もうとすると 0 フレームを返さずエラー(nilError)になるので、
+                // 末尾付近の失敗は EOF として扱う(読めなかった末尾は呼び出し側で無音扱い)
+                break
+            }
             let n = min(Int(buffer.frameLength), Int(total) - offset)
             guard n > 0, let data = buffer.floatChannelData else { break }
             try body(data, n, offset)
